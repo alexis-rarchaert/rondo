@@ -719,6 +719,71 @@ async function reverseGeocode(lat, lng) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// ---------- Réseau routier local (Overpass) ----------
+// Au lieu d'interroger Nominatim point par point (1 req/s max — beaucoup
+// trop lent dès qu'il y a plus qu'une poignée de tronçons), on récupère en
+// UNE seule requête toutes les rues nommées de la zone couverte par le
+// tracé, puis on retrouve localement (aucun réseau) la rue la plus proche
+// de chaque tronçon. Bien plus rapide, et surtout l'usage prévu d'Overpass
+// (une requête groupée sur une zone) contrairement à des centaines de
+// petites requêtes individuelles.
+async function fetchRoadNetwork(points) {
+  let minLat = 90, maxLat = -90, minLng = 180, maxLng = -180;
+  for (const p of points) {
+    if (p.lat < minLat) minLat = p.lat;
+    if (p.lat > maxLat) maxLat = p.lat;
+    if (p.lng < minLng) minLng = p.lng;
+    if (p.lng > maxLng) maxLng = p.lng;
+  }
+  const pad = 0.002; // ~200 m de marge
+  minLat -= pad; maxLat += pad; minLng -= pad; maxLng += pad;
+
+  const query = '[out:json][timeout:25];way["highway"]["name"](' +
+    minLat + ',' + minLng + ',' + maxLat + ',' + maxLng + ');out geom;';
+  const res = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    body: 'data=' + encodeURIComponent(query),
+  });
+  if (!res.ok) throw new Error('Overpass indisponible (' + res.status + ')');
+  const json = await res.json();
+  return (json.elements || [])
+    .map(el => ({
+      name: el.tags && el.tags.name,
+      geometry: (el.geometry || []).map(g => ({ lat: g.lat, lng: g.lon })),
+    }))
+    .filter(w => w.name && w.geometry.length >= 2);
+}
+
+// Distance (mètres) d'un point au segment [a,b], en projetant localement en
+// coordonnées planes autour de p — approximation large amplement suffisante
+// à l'échelle d'une rue.
+function pointToSegmentDistanceM(p, a, b) {
+  const R = 6371000;
+  const cosLat = Math.cos(p.lat * Math.PI / 180);
+  const toXY = pt => ({
+    x: (pt.lng - p.lng) * Math.PI / 180 * R * cosLat,
+    y: (pt.lat - p.lat) * Math.PI / 180 * R,
+  });
+  const A = toXY(a), B = toXY(b);
+  const dx = B.x - A.x, dy = B.y - A.y;
+  const lenSq = dx * dx + dy * dy;
+  let t = lenSq === 0 ? 0 : (-A.x * dx - A.y * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const projX = A.x + t * dx, projY = A.y + t * dy;
+  return Math.hypot(projX, projY);
+}
+
+function nearestRoadName(point, roads, maxDist) {
+  let best = null, bestDist = maxDist;
+  for (const road of roads) {
+    for (let i = 0; i < road.geometry.length - 1; i++) {
+      const d = pointToSegmentDistanceM(point, road.geometry[i], road.geometry[i + 1]);
+      if (d < bestDist) { bestDist = d; best = road.name; }
+    }
+  }
+  return best;
+}
+
 function nearestTrackIndex(points, lat, lng) {
   let best = 0, bestDist = Infinity;
   for (let i = 0; i < points.length; i++) {
@@ -747,29 +812,44 @@ async function generateCahier() {
   list.innerHTML = '';
 
   let legs = detectLegs(points);
-  const estimateSec = Math.ceil(legs.length * 1.1);
-  progress.textContent = legs.length + ' tronçon' + (legs.length > 1 ? 's' : '') + ' détecté' + (legs.length > 1 ? 's' : '') +
-    ' — génération en cours (jusqu\'à ~' + (estimateSec < 60 ? estimateSec + ' s' : Math.ceil(estimateSec / 60) + ' min') + ')…';
-  await sleep(400);
 
-  // Géocodage séquentiel (1 requête/s max, politique Nominatim) du point
-  // médian de chaque tronçon — sauf si ce point est à moins de 30 m du
-  // dernier point réellement géocodé, auquel cas on réutilise le résultat
-  // sans nouvel appel (évite de re-payer une requête pour un tronçon
-  // détecté au même endroit à quelques mètres près).
-  let lastGeoPoint = null, lastGeoStreet = null, calls = 0;
-  for (let i = 0; i < legs.length; i++) {
-    const mid = points[Math.floor((legs[i].startIdx + legs[i].endIdx) / 2)];
-    if (lastGeoPoint && haversine(lastGeoPoint.lat, lastGeoPoint.lng, mid.lat, mid.lng) < 30) {
-      legs[i].street = lastGeoStreet;
-      continue;
+  // 1) Réseau routier de la zone en un seul appel (rapide).
+  let roads = [];
+  progress.textContent = 'Récupération du réseau routier de la zone…';
+  try {
+    roads = await fetchRoadNetwork(points);
+  } catch (err) {
+    progress.textContent = "Réseau routier indisponible (" + err.message + "), repli sur la géolocalisation point par point…";
+    await sleep(1200);
+  }
+
+  // 2) Rue la plus proche de chaque tronçon, localement (sans réseau).
+  const stillNeeded = [];
+  legs.forEach((leg, i) => {
+    const mid = points[Math.floor((leg.startIdx + leg.endIdx) / 2)];
+    leg.mid = mid;
+    leg.street = roads.length ? nearestRoadName(mid, roads, 30) : null;
+    if (!leg.street) stillNeeded.push(i);
+  });
+
+  // 3) Repli Nominatim (1 req/s, avec cache de proximité) uniquement pour les
+  // tronçons que le réseau routier local n'a pas su nommer (zone hors bbox,
+  // rue sans tag "name", Overpass indisponible...).
+  if (stillNeeded.length) {
+    let lastGeoPoint = null, lastGeoStreet = null, calls = 0;
+    for (const i of stillNeeded) {
+      const mid = legs[i].mid;
+      if (lastGeoPoint && haversine(lastGeoPoint.lat, lastGeoPoint.lng, mid.lat, mid.lng) < 30) {
+        legs[i].street = lastGeoStreet;
+        continue;
+      }
+      calls++;
+      progress.textContent = 'Complément via géolocalisation… (' + calls + '/' + stillNeeded.length + ')';
+      legs[i].street = await reverseGeocode(mid.lat, mid.lng);
+      lastGeoPoint = mid;
+      lastGeoStreet = legs[i].street;
+      await sleep(1100);
     }
-    calls++;
-    progress.textContent = 'Récupération des noms de rues… (tronçon ' + (i + 1) + '/' + legs.length + ', requête ' + calls + ')';
-    legs[i].street = await reverseGeocode(mid.lat, mid.lng);
-    lastGeoPoint = mid;
-    lastGeoStreet = legs[i].street;
-    await sleep(1100);
   }
 
   // Fusionne les tronçons consécutifs de même rue (un virage détecté peut

@@ -649,27 +649,56 @@ function haversine(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.asin(Math.sqrt(a));
 }
 
+// Un vrai tracé GPS marché à pied est bruité (dérive de quelques mètres à
+// chaque point) : avec un pas d'échantillonnage court, ce bruit suffit à
+// franchir n'importe quel seuil d'angle et fait exploser le nombre de
+// "virages" détectés (des centaines sur une tournée réelle, contre une
+// poignée de vraies rues). Le pas et le seuil sont donc volontairement
+// larges, et une distance minimale par tronçon absorbe les à-coups sans
+// pour autant perdre le cap réel. Point clé : le cap de chaque fenêtre est
+// calculé en ligne droite entre le DÉBUT et la FIN de la fenêtre de 20 m
+// (pas entre deux points bruts consécutifs, qui peuvent n'être distants que
+// de 2-3 m) — ça lisse l'essentiel du bruit GPS. Chaque fenêtre est ensuite
+// comparée à la précédente (comparaison glissante), pas à un cap fixé au
+// début du tronçon, pour ne pas laisser une dérive progressive s'accumuler.
 function detectLegs(points) {
-  const STEP = 8, THRESHOLD = 28;
+  const STEP = 30, THRESHOLD = 40, MIN_LEG_DIST = 30;
   if (points.length < 2) return [];
   const legs = [];
   let legStartIdx = 0;
-  let refBearing = bearingBetween(points[0].lat, points[0].lng, points[1].lat, points[1].lng);
-  let cumulative = 0, lastSample = 0;
+  let legDist = 0;
+  let sampleStartIdx = 0;
+  let sampleDist = 0;
+  let cumulative = 0;
+  let refBearing = null;
 
   for (let i = 1; i < points.length; i++) {
-    cumulative += haversine(points[i - 1].lat, points[i - 1].lng, points[i].lat, points[i].lng);
-    if (cumulative - lastSample < STEP) continue;
-    lastSample = cumulative;
-    const bearingHere = bearingBetween(points[i - 1].lat, points[i - 1].lng, points[i].lat, points[i].lng);
+    const segDist = haversine(points[i - 1].lat, points[i - 1].lng, points[i].lat, points[i].lng);
+    cumulative += segDist;
+    legDist += segDist;
+    sampleDist += segDist;
+    if (sampleDist < STEP) continue;
+
+    const bearingHere = bearingBetween(
+      points[sampleStartIdx].lat, points[sampleStartIdx].lng,
+      points[i].lat, points[i].lng,
+    );
+    sampleStartIdx = i;
+    sampleDist = 0;
+
+    if (refBearing === null) {
+      refBearing = bearingHere;
+      continue;
+    }
+
     const delta = ((bearingHere - refBearing + 180) % 360) - 180;
-    if (Math.abs(delta) >= THRESHOLD) {
+    if (Math.abs(delta) >= THRESHOLD && legDist >= MIN_LEG_DIST) {
       legs.push({ startIdx: legStartIdx, endIdx: i, distance: cumulative, turn: delta > 0 ? 'droite' : 'gauche' });
       legStartIdx = i;
-      refBearing = bearingHere;
       cumulative = 0;
-      lastSample = 0;
+      legDist = 0;
     }
+    refBearing = bearingHere;
   }
   legs.push({ startIdx: legStartIdx, endIdx: points.length - 1, distance: cumulative, turn: null });
   return legs;
@@ -718,14 +747,29 @@ async function generateCahier() {
   list.innerHTML = '';
 
   let legs = detectLegs(points);
+  const estimateSec = Math.ceil(legs.length * 1.1);
+  progress.textContent = legs.length + ' tronçon' + (legs.length > 1 ? 's' : '') + ' détecté' + (legs.length > 1 ? 's' : '') +
+    ' — génération en cours (jusqu\'à ~' + (estimateSec < 60 ? estimateSec + ' s' : Math.ceil(estimateSec / 60) + ' min') + ')…';
+  await sleep(400);
 
   // Géocodage séquentiel (1 requête/s max, politique Nominatim) du point
-  // médian de chaque tronçon.
+  // médian de chaque tronçon — sauf si ce point est à moins de 30 m du
+  // dernier point réellement géocodé, auquel cas on réutilise le résultat
+  // sans nouvel appel (évite de re-payer une requête pour un tronçon
+  // détecté au même endroit à quelques mètres près).
+  let lastGeoPoint = null, lastGeoStreet = null, calls = 0;
   for (let i = 0; i < legs.length; i++) {
-    progress.textContent = 'Récupération des noms de rues… (' + (i + 1) + '/' + legs.length + ')';
     const mid = points[Math.floor((legs[i].startIdx + legs[i].endIdx) / 2)];
+    if (lastGeoPoint && haversine(lastGeoPoint.lat, lastGeoPoint.lng, mid.lat, mid.lng) < 30) {
+      legs[i].street = lastGeoStreet;
+      continue;
+    }
+    calls++;
+    progress.textContent = 'Récupération des noms de rues… (tronçon ' + (i + 1) + '/' + legs.length + ', requête ' + calls + ')';
     legs[i].street = await reverseGeocode(mid.lat, mid.lng);
-    if (i < legs.length - 1) await sleep(1100);
+    lastGeoPoint = mid;
+    lastGeoStreet = legs[i].street;
+    await sleep(1100);
   }
 
   // Fusionne les tronçons consécutifs de même rue (un virage détecté peut

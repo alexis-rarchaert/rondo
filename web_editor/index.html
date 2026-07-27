@@ -268,8 +268,9 @@
         <div class="section-label">Cahier de tournée</div>
         <p class="hint" style="margin-top:0;">
           Reconstitue le parcours rue par rue à partir du tracé enregistré : nom de rue, distance et virage à
-          chaque changement de direction, avec tes arrêts intercalés. Nécessite une connexion (une requête de
-          géocodage par tronçon détecté, envoyée au rythme d'1/seconde).
+          chaque changement de direction, avec tes arrêts intercalés. Nécessite une connexion : le réseau routier
+          de la zone est récupéré en un seul appel (rapide), avec un repli point par point (1 requête/seconde)
+          uniquement pour les tronçons non trouvés.
         </p>
         <button class="primary" id="btn-generate-cahier">Générer le cahier de tournée</button>
         <div id="cahier-progress"></div>

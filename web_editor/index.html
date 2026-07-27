@@ -193,6 +193,24 @@
   .leg-item.stop-marker .leg-icon { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   .leg-item.stop-marker .leg-street { color: var(--ink); }
   #cahier-progress { font-size: 13px; color: var(--ink-soft); margin-top: 10px; }
+  #print-title { display: none; }
+  #print-title h2 { font-family: Montserrat, sans-serif; font-size: 20px; margin: 0 0 2px; }
+  #print-title p { font-size: 12px; color: var(--ink-soft); margin: 0 0 16px; }
+
+  /* ---- Export PDF (impression navigateur → "Enregistrer au format PDF") ---- */
+  @media print {
+    header, .tabs, #view-edit, #btn-generate-cahier, #btn-print-cahier, #cahier-progress, .hint {
+      display: none !important;
+    }
+    body { background: #fff; }
+    main { max-width: none; padding: 0; }
+    .card { border: none; padding: 0; margin: 0; }
+    #print-title { display: block; }
+    .leg-item { break-inside: avoid; color: #000; }
+    .leg-item .leg-detail { color: #444; }
+    .leg-icon { border-color: #999 !important; }
+    .leg-item.stop-marker .leg-icon { background: #ddd !important; border-color: #999 !important; color: #000 !important; }
+  }
 </style>
 </head>
 <body>
@@ -442,6 +460,7 @@ function showApp() {
   document.getElementById('cahier-result').style.display = 'none';
   document.getElementById('cahier-list').innerHTML = '';
   document.getElementById('cahier-progress').textContent = '';
+  document.getElementById('btn-print-cahier').style.display = 'none';
 
   initMap();
   renderStops();
@@ -802,6 +821,7 @@ function nearestTrackIndex(points, lat, lng) {
 }
 
 document.getElementById('btn-generate-cahier').addEventListener('click', generateCahier);
+document.getElementById('btn-print-cahier').addEventListener('click', () => window.print());
 
 async function generateCahier() {
   const points = tournee.route.points || [];
@@ -882,6 +902,10 @@ async function generateCahier() {
   progress.textContent = '';
   btn.disabled = false;
   resultCard.style.display = 'block';
+  document.getElementById('btn-print-cahier').style.display = 'inline-block';
+  document.getElementById('print-title-name').textContent = tournee.tourneeName || 'Tournée';
+  document.getElementById('print-title-date').textContent =
+    'Cahier de tournée généré le ' + new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
 
   let stopCursor = 0;
   merged.forEach((leg, i) => {

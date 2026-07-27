@@ -7,15 +7,29 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <style>
+  /* Polices La Poste (Halo) hébergées en local — mêmes fichiers que l'app Flutter. */
+  @font-face {
+    font-family: 'Montserrat';
+    src: url('../assets/fonts/Montserrat-Variable.ttf') format('truetype');
+    font-weight: 100 900;
+  }
+  @font-face {
+    font-family: 'Roboto';
+    src: url('../assets/fonts/Roboto-Variable.ttf') format('truetype');
+    font-weight: 100 900;
+  }
+
   :root {
     --accent: #FFCB05;
     --accent-ink: #353535;
     --live: #003DA5;
     --link: #0058E1;
     --danger: #C61111;
+    --done: #007F00;
     --ink: #353535;
     --ink-soft: #636363;
     --line: #E2E2E2;
+    --field-border: #C6C6C6;
     --paper: #F6F6F6;
     --paper-raised: #FFFFFF;
     --radius: 8px;
@@ -36,6 +50,9 @@
     justify-content: space-between;
     flex-wrap: wrap;
     gap: 10px;
+    position: sticky;
+    top: 0;
+    z-index: 20;
   }
   header h1 {
     font-family: Montserrat, sans-serif;
@@ -43,7 +60,13 @@
     font-weight: 800;
     margin: 0;
   }
-  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .tabs { display: flex; gap: 4px; background: var(--paper); border: 1px solid var(--line); border-radius: var(--radius); padding: 3px; }
+  .tabs button {
+    border: none; background: transparent; padding: 7px 14px; font-size: 13px;
+    color: var(--ink-soft); border-radius: 6px; cursor: pointer; font-weight: 700; font-family: Montserrat, sans-serif;
+  }
+  .tabs button.active { background: var(--accent); color: var(--accent-ink); }
+  main { max-width: 1280px; margin: 0 auto; padding: 20px; }
   .card {
     background: var(--paper-raised);
     border: 1px solid var(--line);
@@ -52,6 +75,7 @@
     margin-bottom: 20px;
   }
   .section-label {
+    font-family: Montserrat, sans-serif;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 1.2px;
@@ -92,19 +116,22 @@
   input[type=text], input[type=number] {
     font-family: Roboto, sans-serif;
     font-size: 13.5px;
-    border: 1px solid var(--line);
+    border: 1px solid var(--field-border);
     border-radius: var(--radius);
     padding: 8px 10px;
     width: 100%;
+    background: var(--paper-raised);
+    color: var(--ink);
   }
+  input::placeholder { color: var(--ink-soft); }
   input:focus { outline: 2px solid var(--link); border-color: var(--link); }
   table { width: 100%; border-collapse: collapse; }
   th { text-align: left; font-size: 11px; color: var(--ink-soft); padding: 6px 8px; }
   td { padding: 5px 8px; vertical-align: middle; }
   tr + tr td { border-top: 1px solid var(--line); }
-  td.narrow { width: 90px; }
-  td.actions { width: 110px; white-space: nowrap; }
-  #map { height: 360px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
+  td.narrow { width: 84px; }
+  td.actions { width: 104px; white-space: nowrap; }
+  #map { height: 620px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
   .row { display: flex; gap: 8px; align-items: center; }
   .hint { font-size: 12px; color: var(--ink-soft); margin: 6px 0 14px; }
   .badge {
@@ -118,17 +145,67 @@
   }
   #status { font-size: 13px; margin-top: 10px; }
   #status.error { color: var(--danger); }
-  #status.ok { color: #007F00; }
+  #status.ok { color: var(--done); }
   #app-content { display: none; }
+
+  /* ---- Mise en page édition : carte à gauche, arrêts à droite (scrollable) ---- */
+  .edit-grid {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .edit-grid { grid-template-columns: 1fr; }
+  }
+  .stops-card {
+    position: sticky;
+    top: 84px;
+    max-height: calc(100vh - 104px);
+    display: flex;
+    flex-direction: column;
+  }
+  .stops-scroll {
+    overflow-y: auto;
+    flex: 1;
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+
+  /* ---- Cahier de tournée ---- */
+  #view-cahier { display: none; }
+  .leg-list { list-style: none; margin: 0; padding: 0; }
+  .leg-item {
+    display: flex;
+    gap: 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+    align-items: flex-start;
+  }
+  .leg-item .leg-icon {
+    width: 34px; height: 34px; border-radius: 50%;
+    background: var(--paper); border: 1px solid var(--line);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0;
+  }
+  .leg-item .leg-street { font-family: Montserrat, sans-serif; font-weight: 700; font-size: 14.5px; }
+  .leg-item .leg-detail { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
+  .leg-item.stop-marker .leg-icon { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .leg-item.stop-marker .leg-street { color: var(--ink); }
+  #cahier-progress { font-size: 13px; color: var(--ink-soft); margin-top: 10px; }
 </style>
 </head>
 <body>
 
 <header>
   <h1>🗺️ Éditeur de tournée</h1>
-  <div class="row">
+  <div class="row" id="header-actions" style="display:none;">
+    <div class="tabs">
+      <button id="tab-edit" class="active">Édition</button>
+      <button id="tab-cahier">Cahier de tournée</button>
+    </div>
     <button class="link" id="btn-new-load">Charger un autre fichier</button>
-    <button class="primary" id="btn-export" disabled>Exporter le .tournee</button>
+    <button class="primary" id="btn-export">Exporter le .tournee</button>
   </div>
 </header>
 
@@ -143,41 +220,65 @@
   </div>
 
   <div id="app-content">
-    <div class="card">
-      <div class="section-label">Tournée</div>
-      <input type="text" id="tournee-name" placeholder="Nom de la tournée">
-      <p class="hint" id="days-hint"></p>
-    </div>
 
-    <div class="card">
-      <div class="section-label">Carte — clique pour ajouter un arrêt, glisse un marqueur pour le déplacer</div>
-      <div id="map"></div>
-    </div>
-
-    <div class="card">
-      <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
-        <div class="section-label" style="margin: 0;">Arrêts</div>
-        <span class="badge" id="stops-count">0</span>
+    <div id="view-edit">
+      <div class="card">
+        <div class="section-label">Tournée</div>
+        <input type="text" id="tournee-name" placeholder="Nom de la tournée">
+        <p class="hint" id="days-hint"></p>
       </div>
-      <table>
-        <thead>
-          <tr><th></th><th>Libellé</th><th>Note</th><th>Lat</th><th>Lng</th><th></th></tr>
-        </thead>
-        <tbody id="stops-body"></tbody>
-      </table>
-      <p class="hint">Astuce : clique sur la carte ci-dessus pour ajouter rapidement un arrêt à un endroit précis.</p>
-    </div>
 
-    <div class="card">
-      <div class="section-label">Checklist par défaut</div>
-      <table>
-        <tbody id="checklist-body"></tbody>
-      </table>
-      <div class="row" style="margin-top: 10px;">
-        <input type="text" id="checklist-new" placeholder="Ajouter un point de contrôle">
-        <button id="checklist-add">Ajouter</button>
+      <div class="edit-grid">
+        <div class="card" style="margin-bottom:0;">
+          <div class="section-label">Carte — clique pour ajouter un arrêt, glisse un marqueur pour le déplacer</div>
+          <div id="map"></div>
+        </div>
+
+        <div class="card stops-card">
+          <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
+            <div class="section-label" style="margin: 0;">Arrêts</div>
+            <span class="badge" id="stops-count">0</span>
+          </div>
+          <div class="stops-scroll">
+            <table>
+              <thead>
+                <tr><th></th><th>Libellé</th><th>Note</th><th></th></tr>
+              </thead>
+              <tbody id="stops-body"></tbody>
+            </table>
+          </div>
+          <p class="hint" style="margin-bottom:0;">Un libellé vide s'affiche automatiquement comme "Arrêt N" selon la position.</p>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-label">Checklist par défaut</div>
+        <table>
+          <tbody id="checklist-body"></tbody>
+        </table>
+        <div class="row" style="margin-top: 10px;">
+          <input type="text" id="checklist-new" placeholder="Ajouter un point de contrôle">
+          <button id="checklist-add">Ajouter</button>
+        </div>
       </div>
     </div>
+
+    <div id="view-cahier">
+      <div class="card">
+        <div class="section-label">Cahier de tournée</div>
+        <p class="hint" style="margin-top:0;">
+          Reconstitue le parcours rue par rue à partir du tracé enregistré : nom de rue, distance et virage à
+          chaque changement de direction, avec tes arrêts intercalés. Nécessite une connexion (une requête de
+          géocodage par tronçon détecté, envoyée au rythme d'1/seconde).
+        </p>
+        <button class="primary" id="btn-generate-cahier">Générer le cahier de tournée</button>
+        <div id="cahier-progress"></div>
+      </div>
+      <div class="card" id="cahier-result" style="display:none;">
+        <ol class="leg-list" id="cahier-list"></ol>
+      </div>
+    </div>
+
   </div>
 </main>
 
@@ -248,6 +349,16 @@ async function encodeTournee(data) {
   return JSON.stringify({ magic: MAGIC, version: 1, checksum, payload });
 }
 
+// ---------- Nom affiché d'un arrêt ----------
+// Comme côté app Flutter (stopDisplayLabel dans models.dart) : un libellé
+// vide n'est JAMAIS stocké comme "Arrêt N" — seulement affiché comme tel,
+// recalculé à partir de la position actuelle. Un arrêt supprimé ou déplacé
+// ne laisse donc jamais un nom désynchronisé de son numéro.
+function stopDisplayLabel(stop, index) {
+  const label = (stop.label || '').trim();
+  return label ? label : 'Arrêt ' + (index + 1);
+}
+
 // ---------- État ----------
 let tournee = null;
 let map, polyline, markers = [];
@@ -275,8 +386,8 @@ fileInput.addEventListener('change', () => {
 });
 document.getElementById('btn-new-load').addEventListener('click', () => {
   document.getElementById('app-content').style.display = 'none';
+  document.getElementById('header-actions').style.display = 'none';
   document.getElementById('loader').style.display = 'block';
-  document.getElementById('btn-export').disabled = true;
   setStatus('');
 });
 
@@ -295,17 +406,34 @@ async function loadFile(file) {
   }
 }
 
+// ---------- Onglets ----------
+document.getElementById('tab-edit').addEventListener('click', () => switchTab('edit'));
+document.getElementById('tab-cahier').addEventListener('click', () => switchTab('cahier'));
+
+function switchTab(name) {
+  document.getElementById('view-edit').style.display = name === 'edit' ? 'block' : 'none';
+  document.getElementById('view-cahier').style.display = name === 'cahier' ? 'block' : 'none';
+  document.getElementById('tab-edit').classList.toggle('active', name === 'edit');
+  document.getElementById('tab-cahier').classList.toggle('active', name === 'cahier');
+  if (name === 'edit' && map) setTimeout(() => map.invalidateSize(), 0);
+}
+
 // ---------- Affichage ----------
 function showApp() {
   document.getElementById('loader').style.display = 'none';
   document.getElementById('app-content').style.display = 'block';
-  document.getElementById('btn-export').disabled = false;
+  document.getElementById('header-actions').style.display = 'flex';
+  switchTab('edit');
 
   document.getElementById('tournee-name').value = tournee.tourneeName || '';
   const dayCount = Object.keys(tournee.days || {}).length;
   document.getElementById('days-hint').textContent =
     dayCount + ' journée' + (dayCount > 1 ? 's' : '') + ' enregistrée' + (dayCount > 1 ? 's' : '') +
     " (checklists/notes du jour non modifiables ici, préservées telles quelles).";
+
+  document.getElementById('cahier-result').style.display = 'none';
+  document.getElementById('cahier-list').innerHTML = '';
+  document.getElementById('cahier-progress').textContent = '';
 
   initMap();
   renderStops();
@@ -343,7 +471,7 @@ function refreshMapMarkers() {
   stops.forEach((s, i) => {
     const marker = L.marker([s.lat, s.lng], { draggable: true })
       .addTo(map)
-      .bindTooltip(String(i + 1), { permanent: true, direction: 'top', className: 'stop-tooltip' });
+      .bindTooltip((i + 1) + '. ' + stopDisplayLabel(s, i), { permanent: false, direction: 'top' });
     marker.on('dragend', () => {
       const pos = marker.getLatLng();
       s.lat = pos.lat;
@@ -360,8 +488,8 @@ function refreshMapMarkers() {
 // ---------- Arrêts ----------
 function addStop(lat, lng) {
   if (!tournee.route.stops) tournee.route.stops = [];
-  const n = tournee.route.stops.length + 1;
-  tournee.route.stops.push({ lat, lng, label: 'Arrêt ' + n, note: '' });
+  // Pas de "Arrêt N" stocké : voir stopDisplayLabel().
+  tournee.route.stops.push({ lat, lng, label: '', note: '' });
   Object.values(tournee.days || {}).forEach(day => day.visited.push(false));
   renderStops();
 }
@@ -402,14 +530,11 @@ function renderStops() {
     tdIdx.style.fontSize = '12px';
     tr.appendChild(tdIdx);
 
-    tr.appendChild(makeTextCell(s.label, v => { s.label = v; }));
+    tr.appendChild(makeLabelCell(s, i));
     tr.appendChild(makeTextCell(s.note, v => { s.note = v; }));
-    tr.appendChild(makeNumberCell(s.lat, v => { s.lat = v; refreshMapMarkers(); }));
-    tr.appendChild(makeNumberCell(s.lng, v => { s.lng = v; refreshMapMarkers(); }));
 
     const tdActions = document.createElement('td');
     tdActions.className = 'actions';
-    tdActions.innerHTML = '';
     const up = smallBtn('↑', () => moveStop(i, -1));
     const down = smallBtn('↓', () => moveStop(i, 1));
     const del = smallBtn('✕', () => deleteStop(i), true);
@@ -422,24 +547,29 @@ function renderStops() {
   refreshMapMarkers();
 }
 
+function makeLabelCell(stop, index) {
+  const td = document.createElement('td');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = stop.label || '';
+  input.placeholder = 'Arrêt ' + (index + 1);
+  input.addEventListener('input', () => {
+    stop.label = input.value;
+    // Le marqueur carte affiche le libellé : on le resynchronise sans tout
+    // reconstruire (garde le focus sur le champ en cours d'édition).
+    const marker = markers[index];
+    if (marker) marker.setTooltipContent((index + 1) + '. ' + stopDisplayLabel(stop, index));
+  });
+  td.appendChild(input);
+  return td;
+}
+
 function makeTextCell(value, onChange) {
   const td = document.createElement('td');
   const input = document.createElement('input');
   input.type = 'text';
   input.value = value || '';
   input.addEventListener('input', () => onChange(input.value));
-  td.appendChild(input);
-  return td;
-}
-
-function makeNumberCell(value, onChange) {
-  const td = document.createElement('td');
-  td.className = 'narrow';
-  const input = document.createElement('input');
-  input.type = 'number';
-  input.step = 'any';
-  input.value = value;
-  input.addEventListener('change', () => onChange(parseFloat(input.value)));
   td.appendChild(input);
   return td;
 }
@@ -495,6 +625,168 @@ document.getElementById('btn-export').addEventListener('click', async () => {
   a.remove();
   URL.revokeObjectURL(url);
 });
+
+// ---------- Cahier de tournée ----------
+// Même heuristique de détection de virage que app_state.dart
+// (nextTurnInstruction), mais appliquée à TOUT le tracé enregistré pour en
+// reconstituer le parcours complet, rue par rue.
+
+function toRad(d) { return d * Math.PI / 180; }
+function toDeg(r) { return r * 180 / Math.PI; }
+
+function bearingBetween(lat1, lon1, lat2, lon2) {
+  const y = Math.sin(toRad(lon2 - lon1)) * Math.cos(toRad(lat2));
+  const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) -
+            Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
+  return (toDeg(Math.atan2(y, x)) + 360) % 360;
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000;
+  const dLat = toRad(lat2 - lat1);
+  const dLon = toRad(lon2 - lon1);
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
+function detectLegs(points) {
+  const STEP = 8, THRESHOLD = 28;
+  if (points.length < 2) return [];
+  const legs = [];
+  let legStartIdx = 0;
+  let refBearing = bearingBetween(points[0].lat, points[0].lng, points[1].lat, points[1].lng);
+  let cumulative = 0, lastSample = 0;
+
+  for (let i = 1; i < points.length; i++) {
+    cumulative += haversine(points[i - 1].lat, points[i - 1].lng, points[i].lat, points[i].lng);
+    if (cumulative - lastSample < STEP) continue;
+    lastSample = cumulative;
+    const bearingHere = bearingBetween(points[i - 1].lat, points[i - 1].lng, points[i].lat, points[i].lng);
+    const delta = ((bearingHere - refBearing + 180) % 360) - 180;
+    if (Math.abs(delta) >= THRESHOLD) {
+      legs.push({ startIdx: legStartIdx, endIdx: i, distance: cumulative, turn: delta > 0 ? 'droite' : 'gauche' });
+      legStartIdx = i;
+      refBearing = bearingHere;
+      cumulative = 0;
+      lastSample = 0;
+    }
+  }
+  legs.push({ startIdx: legStartIdx, endIdx: points.length - 1, distance: cumulative, turn: null });
+  return legs;
+}
+
+async function reverseGeocode(lat, lng) {
+  const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + lat + '&lon=' + lng + '&zoom=17&addressdetails=1';
+  try {
+    const res = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const addr = json.address || {};
+    return addr.road || addr.pedestrian || addr.footway || addr.residential || null;
+  } catch {
+    return null;
+  }
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function nearestTrackIndex(points, lat, lng) {
+  let best = 0, bestDist = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const d = haversine(lat, lng, points[i].lat, points[i].lng);
+    if (d < bestDist) { bestDist = d; best = i; }
+  }
+  return best;
+}
+
+document.getElementById('btn-generate-cahier').addEventListener('click', generateCahier);
+
+async function generateCahier() {
+  const points = tournee.route.points || [];
+  const progress = document.getElementById('cahier-progress');
+  const btn = document.getElementById('btn-generate-cahier');
+  const resultCard = document.getElementById('cahier-result');
+  const list = document.getElementById('cahier-list');
+
+  if (points.length < 2) {
+    progress.textContent = "Aucun tracé enregistré dans cette tournée : impossible de générer le cahier.";
+    return;
+  }
+
+  btn.disabled = true;
+  resultCard.style.display = 'none';
+  list.innerHTML = '';
+
+  let legs = detectLegs(points);
+
+  // Géocodage séquentiel (1 requête/s max, politique Nominatim) du point
+  // médian de chaque tronçon.
+  for (let i = 0; i < legs.length; i++) {
+    progress.textContent = 'Récupération des noms de rues… (' + (i + 1) + '/' + legs.length + ')';
+    const mid = points[Math.floor((legs[i].startIdx + legs[i].endIdx) / 2)];
+    legs[i].street = await reverseGeocode(mid.lat, mid.lng);
+    if (i < legs.length - 1) await sleep(1100);
+  }
+
+  // Fusionne les tronçons consécutifs de même rue (un virage détecté peut
+  // n'être qu'une légère courbe de la même rue, pas un vrai changement de rue).
+  const merged = [];
+  for (const leg of legs) {
+    const last = merged[merged.length - 1];
+    if (last && last.street && leg.street && last.street === leg.street) {
+      last.distance += leg.distance;
+      last.endIdx = leg.endIdx;
+      last.turn = leg.turn;
+    } else {
+      merged.push({ ...leg });
+    }
+  }
+
+  // Repère l'arrêt le plus proche de la fin de chaque tronçon pour
+  // l'intercaler au bon endroit dans le cahier.
+  const stops = tournee.route.stops || [];
+  const stopTrackIdx = stops.map(s => nearestTrackIndex(points, s.lat, s.lng));
+
+  progress.textContent = '';
+  btn.disabled = false;
+  resultCard.style.display = 'block';
+
+  let stopCursor = 0;
+  merged.forEach((leg, i) => {
+    const streetName = leg.street || 'Rue inconnue';
+    const li = document.createElement('li');
+    li.className = 'leg-item';
+    const distText = leg.distance < 1000 ? Math.round(leg.distance) + ' m' : (leg.distance / 1000).toFixed(1) + ' km';
+    const action = leg.turn === 'droite' ? '→ tourne à droite'
+      : leg.turn === 'gauche' ? '→ tourne à gauche'
+      : (i === merged.length - 1 ? '→ arrivée' : '→ continue tout droit');
+    const icon = leg.turn === 'droite' ? '↱' : leg.turn === 'gauche' ? '↰' : '↑';
+    li.innerHTML =
+      '<div class="leg-icon">' + icon + '</div>' +
+      '<div><div class="leg-street">' + (i + 1) + '. ' + escapeHtml(streetName) + '</div>' +
+      '<div class="leg-detail">' + distText + ' ' + action + '</div></div>';
+    list.appendChild(li);
+
+    // Arrêts dont le point du tracé le plus proche tombe dans ce tronçon.
+    while (stopCursor < stops.length && stopTrackIdx[stopCursor] <= leg.endIdx) {
+      const s = stops[stopCursor];
+      const sLi = document.createElement('li');
+      sLi.className = 'leg-item stop-marker';
+      sLi.innerHTML =
+        '<div class="leg-icon">📍</div>' +
+        '<div><div class="leg-street">' + escapeHtml(stopDisplayLabel(s, stopCursor)) + '</div>' +
+        (s.note ? '<div class="leg-detail">' + escapeHtml(s.note) + '</div>' : '') + '</div>';
+      list.appendChild(sLi);
+      stopCursor++;
+    }
+  });
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
 </script>
 </body>
 </html>

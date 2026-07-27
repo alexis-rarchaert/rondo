@@ -272,10 +272,17 @@
           de la zone est récupéré en un seul appel (rapide), avec un repli point par point (1 requête/seconde)
           uniquement pour les tronçons non trouvés.
         </p>
-        <button class="primary" id="btn-generate-cahier">Générer le cahier de tournée</button>
+        <div class="row">
+          <button class="primary" id="btn-generate-cahier">Générer le cahier de tournée</button>
+          <button id="btn-print-cahier" style="display:none;">Exporter en PDF</button>
+        </div>
         <div id="cahier-progress"></div>
       </div>
       <div class="card" id="cahier-result" style="display:none;">
+        <div id="print-title">
+          <h2 id="print-title-name"></h2>
+          <p id="print-title-date"></p>
+        </div>
         <ol class="leg-list" id="cahier-list"></ol>
       </div>
     </div>

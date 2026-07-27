@@ -192,6 +192,8 @@
   .leg-item .leg-detail { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
   .leg-item.stop-marker .leg-icon { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
   .leg-item.stop-marker .leg-street { color: var(--ink); }
+  .leg-item.city-marker .leg-icon { background: var(--live); border-color: var(--live); color: #fff; }
+  .leg-item.city-marker .leg-street { color: var(--live); }
   #cahier-progress { font-size: 13px; color: var(--ink-soft); margin-top: 10px; }
   .track-point-icon {
     background: var(--live);
@@ -840,6 +842,22 @@ async function reverseGeocode(lat, lng) {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
+// Nom de ville/commune (zoom administratif, distinct du géocodage de rue en
+// zoom=17). Utilisé avec parcimonie dans generateCahier() : une commune ne
+// change pas tous les 10 m, donc pas besoin de vérifier à chaque tronçon.
+async function fetchCityName(lat, lng) {
+  const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=' + lat + '&lon=' + lng + '&zoom=10&addressdetails=1';
+  try {
+    const res = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
+    if (!res.ok) return null;
+    const json = await res.json();
+    const addr = json.address || {};
+    return addr.city || addr.town || addr.village || addr.municipality || null;
+  } catch {
+    return null;
+  }
+}
+
 // ---------- Réseau routier local (Overpass) ----------
 // Au lieu d'interroger Nominatim point par point (1 req/s max — beaucoup
 // trop lent dès qu'il y a plus qu'une poignée de tronçons), on récupère en
@@ -988,6 +1006,24 @@ async function generateCahier() {
     }
   }
 
+  // Détecte les changements de ville/commune, avec parcimonie : une commune
+  // ne change pas tous les 10 m, donc on ne revérifie que tous les ~400 m
+  // parcourus (quelques requêtes tout au plus, même sur une longue tournée),
+  // au lieu d'un appel par tronçon.
+  let currentCity = null, distSinceCityCheck = Infinity;
+  for (const leg of merged) {
+    distSinceCityCheck += leg.distance;
+    if (distSinceCityCheck < 400 && currentCity !== null) continue;
+    distSinceCityCheck = 0;
+    progress.textContent = 'Vérification de la ville…';
+    const city = await fetchCityName(leg.mid.lat, leg.mid.lng);
+    await sleep(1100);
+    if (city && city !== currentCity) {
+      leg.cityChange = city;
+      currentCity = city;
+    }
+  }
+
   // Repère l'arrêt le plus proche de la fin de chaque tronçon pour
   // l'intercaler au bon endroit dans le cahier.
   const stops = tournee.route.stops || [];
@@ -1003,6 +1039,15 @@ async function generateCahier() {
 
   let stopCursor = 0;
   merged.forEach((leg, i) => {
+    if (leg.cityChange) {
+      const cLi = document.createElement('li');
+      cLi.className = 'leg-item city-marker';
+      cLi.innerHTML =
+        '<div class="leg-icon">🏙️</div>' +
+        '<div><div class="leg-street">Entrée dans ' + escapeHtml(leg.cityChange) + '</div></div>';
+      list.appendChild(cLi);
+    }
+
     const streetName = leg.street || 'Rue inconnue';
     const li = document.createElement('li');
     li.className = 'leg-item';

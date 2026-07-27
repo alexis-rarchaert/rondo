@@ -248,7 +248,13 @@
 
       <div class="edit-grid">
         <div class="card" style="margin-bottom:0;">
-          <div class="section-label">Carte — clique pour ajouter un arrêt, glisse un marqueur pour le déplacer</div>
+          <div class="row" style="justify-content: space-between; margin-bottom: 8px;">
+            <div class="tabs">
+              <button id="mode-stops" class="active">Arrêts</button>
+              <button id="mode-track">Tracé</button>
+            </div>
+            <span class="hint" id="map-mode-hint" style="margin: 0;"></span>
+          </div>
           <div id="map"></div>
         </div>
 
@@ -472,6 +478,26 @@ document.getElementById('tournee-name').addEventListener('input', e => {
 });
 
 // ---------- Carte ----------
+// Deux modes pour un même clic sur la carte, comme le double onglet
+// Enregistrer/Suivre de l'app : "stops" ajoute un arrêt (comportement
+// d'origine), "track" modifie le tracé GPS lui-même (insertion/suppression
+// de points). Évite toute ambiguïté sur ce que fait un clic.
+let mapMode = 'stops';
+let trackMarkers = [];
+
+function setMapMode(mode) {
+  mapMode = mode;
+  document.getElementById('mode-stops').classList.toggle('active', mode === 'stops');
+  document.getElementById('mode-track').classList.toggle('active', mode === 'track');
+  document.getElementById('map-mode-hint').textContent = mode === 'stops'
+    ? 'Clique pour ajouter un arrêt, glisse un marqueur pour le déplacer.'
+    : 'Clique sur le tracé pour y insérer un point, clique un point existant pour le supprimer.';
+  refreshTrackMarkers();
+}
+
+document.getElementById('mode-stops').addEventListener('click', () => setMapMode('stops'));
+document.getElementById('mode-track').addEventListener('click', () => setMapMode('track'));
+
 function initMap() {
   if (map) { map.remove(); }
   map = L.map('map').setView([46.6, 2.2], 5);
@@ -480,14 +506,21 @@ function initMap() {
     maxZoom: 19,
   }).addTo(map);
 
-  const points = tournee.route.points || [];
-  if (points.length >= 2) {
-    polyline = L.polyline(points.map(p => [p.lat, p.lng]), { color: '#636363', weight: 4, opacity: 0.6 }).addTo(map);
-  }
+  polyline = L.polyline([], { color: '#636363', weight: 4, opacity: 0.6 }).addTo(map);
+  redrawTrackLine();
 
   // La vue est cadrée sur les arrêts/le tracé par refreshMapMarkers(),
   // appelée juste après via renderStops().
-  map.on('click', e => addStop(e.latlng.lat, e.latlng.lng));
+  map.on('click', e => {
+    if (mapMode === 'stops') addStop(e.latlng.lat, e.latlng.lng);
+    else insertTrackPoint(e.latlng);
+  });
+  setMapMode('stops');
+}
+
+function redrawTrackLine() {
+  const points = tournee.route.points || [];
+  polyline.setLatLngs(points.length >= 2 ? points.map(p => [p.lat, p.lng]) : []);
 }
 
 function refreshMapMarkers() {
@@ -508,8 +541,62 @@ function refreshMapMarkers() {
     markers.push(marker);
     bounds.push([s.lat, s.lng]);
   });
-  if (polyline) bounds.push(...polyline.getLatLngs().map(p => [p.lat, p.lng]));
+  const points = tournee.route.points || [];
+  if (points.length) bounds.push(...points.map(p => [p.lat, p.lng]));
   if (bounds.length) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 17 });
+}
+
+// ---------- Tracé (mode "Tracé" uniquement) ----------
+function refreshTrackMarkers() {
+  trackMarkers.forEach(m => m.remove());
+  trackMarkers = [];
+  if (mapMode !== 'track') return;
+
+  const points = tournee.route.points || [];
+  const icon = L.divIcon({ className: 'track-point-icon', iconSize: [10, 10] });
+  points.forEach((p, i) => {
+    const marker = L.marker([p.lat, p.lng], { draggable: true, icon })
+      .addTo(map)
+      .on('dragend', () => {
+        const pos = marker.getLatLng();
+        p.lat = pos.lat;
+        p.lng = pos.lng;
+        redrawTrackLine();
+      })
+      .on('click', e => {
+        L.DomEvent.stopPropagation(e);
+        deleteTrackPoint(i);
+      });
+    trackMarkers.push(marker);
+  });
+}
+
+function insertTrackPoint(latlng) {
+  if (!tournee.route.points) tournee.route.points = [];
+  const points = tournee.route.points;
+
+  if (points.length < 2) {
+    points.push({ lat: latlng.lat, lng: latlng.lng, ts: Date.now() });
+    redrawTrackLine();
+    refreshTrackMarkers();
+    return;
+  }
+
+  let bestIdx = 0, bestDist = Infinity;
+  for (let i = 0; i < points.length - 1; i++) {
+    const d = pointToSegmentDistanceM(latlng, points[i], points[i + 1]);
+    if (d < bestDist) { bestDist = d; bestIdx = i; }
+  }
+  const tsInterp = Math.round((points[bestIdx].ts + points[bestIdx + 1].ts) / 2);
+  points.splice(bestIdx + 1, 0, { lat: latlng.lat, lng: latlng.lng, ts: tsInterp });
+  redrawTrackLine();
+  refreshTrackMarkers();
+}
+
+function deleteTrackPoint(index) {
+  tournee.route.points.splice(index, 1);
+  redrawTrackLine();
+  refreshTrackMarkers();
 }
 
 // ---------- Arrêts ----------

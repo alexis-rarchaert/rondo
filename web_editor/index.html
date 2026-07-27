@@ -1,0 +1,500 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Éditeur de tournée</title>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root {
+    --accent: #FFCB05;
+    --accent-ink: #353535;
+    --live: #003DA5;
+    --link: #0058E1;
+    --danger: #C61111;
+    --ink: #353535;
+    --ink-soft: #636363;
+    --line: #E2E2E2;
+    --paper: #F6F6F6;
+    --paper-raised: #FFFFFF;
+    --radius: 8px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: Roboto, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    background: var(--paper);
+    color: var(--ink);
+  }
+  header {
+    background: var(--paper-raised);
+    border-bottom: 1px solid var(--line);
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  header h1 {
+    font-family: Montserrat, sans-serif;
+    font-size: 18px;
+    font-weight: 800;
+    margin: 0;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 20px; }
+  .card {
+    background: var(--paper-raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 20px;
+  }
+  .section-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    color: var(--ink-soft);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  #dropzone {
+    border: 2px dashed var(--line);
+    border-radius: var(--radius);
+    padding: 48px 20px;
+    text-align: center;
+    color: var(--ink-soft);
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+  }
+  #dropzone.dragover { border-color: var(--live); background: #eef4ff; }
+  #dropzone input { display: none; }
+  button, .btn {
+    font-family: Montserrat, sans-serif;
+    font-weight: 700;
+    font-size: 13.5px;
+    border-radius: var(--radius);
+    border: 1px solid var(--ink);
+    background: transparent;
+    color: var(--ink);
+    padding: 9px 18px;
+    cursor: pointer;
+  }
+  button.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: var(--accent-ink);
+  }
+  button.link { border: none; color: var(--link); padding: 6px 8px; }
+  button.danger-outline { border-color: var(--danger); color: var(--danger); }
+  button:disabled { opacity: .4; cursor: not-allowed; }
+  input[type=text], input[type=number] {
+    font-family: Roboto, sans-serif;
+    font-size: 13.5px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 8px 10px;
+    width: 100%;
+  }
+  input:focus { outline: 2px solid var(--link); border-color: var(--link); }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; color: var(--ink-soft); padding: 6px 8px; }
+  td { padding: 5px 8px; vertical-align: middle; }
+  tr + tr td { border-top: 1px solid var(--line); }
+  td.narrow { width: 90px; }
+  td.actions { width: 110px; white-space: nowrap; }
+  #map { height: 360px; border-radius: var(--radius); overflow: hidden; border: 1px solid var(--line); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .hint { font-size: 12px; color: var(--ink-soft); margin: 6px 0 14px; }
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 600;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 2px 10px;
+  }
+  #status { font-size: 13px; margin-top: 10px; }
+  #status.error { color: var(--danger); }
+  #status.ok { color: #007F00; }
+  #app-content { display: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🗺️ Éditeur de tournée</h1>
+  <div class="row">
+    <button class="link" id="btn-new-load">Charger un autre fichier</button>
+    <button class="primary" id="btn-export" disabled>Exporter le .tournee</button>
+  </div>
+</header>
+
+<main>
+  <div id="loader" class="card">
+    <div class="section-label">Fichier .tournee</div>
+    <div id="dropzone">
+      Glisse un fichier <strong>.tournee</strong> ici, ou clique pour le sélectionner
+      <input type="file" id="file-input" accept=".tournee">
+    </div>
+    <div id="status"></div>
+  </div>
+
+  <div id="app-content">
+    <div class="card">
+      <div class="section-label">Tournée</div>
+      <input type="text" id="tournee-name" placeholder="Nom de la tournée">
+      <p class="hint" id="days-hint"></p>
+    </div>
+
+    <div class="card">
+      <div class="section-label">Carte — clique pour ajouter un arrêt, glisse un marqueur pour le déplacer</div>
+      <div id="map"></div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content: space-between; margin-bottom: 10px;">
+        <div class="section-label" style="margin: 0;">Arrêts</div>
+        <span class="badge" id="stops-count">0</span>
+      </div>
+      <table>
+        <thead>
+          <tr><th></th><th>Libellé</th><th>Note</th><th>Lat</th><th>Lng</th><th></th></tr>
+        </thead>
+        <tbody id="stops-body"></tbody>
+      </table>
+      <p class="hint">Astuce : clique sur la carte ci-dessus pour ajouter rapidement un arrêt à un endroit précis.</p>
+    </div>
+
+    <div class="card">
+      <div class="section-label">Checklist par défaut</div>
+      <table>
+        <tbody id="checklist-body"></tbody>
+      </table>
+      <div class="row" style="margin-top: 10px;">
+        <input type="text" id="checklist-new" placeholder="Ajouter un point de contrôle">
+        <button id="checklist-add">Ajouter</button>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script>
+const MAGIC = 'TOURNEE';
+
+// ---------- .tournee : mêmes règles que lib/tournee_file.dart ----------
+// XOR réversible avec la clé "TOURNEE" + empreinte SHA-256 du JSON d'origine
+// pour détecter un fichier corrompu ou invalide.
+
+function xorWithKey(bytes, keyBytes) {
+  const out = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) out[i] = bytes[i] ^ keyBytes[i % keyBytes.length];
+  return out;
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(b64) {
+  const binary = atob(b64);
+  const out = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+  return out;
+}
+
+async function sha256Hex(bytes) {
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return [...new Uint8Array(digest)].map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function decodeTournee(fileText) {
+  let wrapper;
+  try {
+    wrapper = JSON.parse(fileText);
+  } catch {
+    throw new Error("Ce fichier n'est pas un export de tournée valide.");
+  }
+  if (wrapper.magic !== MAGIC) throw new Error("Ce fichier n'est pas un export de tournée valide.");
+  if (!wrapper.payload || !wrapper.checksum) throw new Error('Fichier de tournée incomplet.');
+
+  const keyBytes = new TextEncoder().encode(MAGIC);
+  let jsonStr;
+  try {
+    const xored = xorWithKey(base64ToBytes(wrapper.payload), keyBytes);
+    jsonStr = new TextDecoder().decode(xored);
+  } catch {
+    throw new Error('Fichier de tournée illisible.');
+  }
+
+  const actualChecksum = await sha256Hex(new TextEncoder().encode(jsonStr));
+  if (actualChecksum !== wrapper.checksum) throw new Error('Fichier de tournée corrompu (empreinte invalide).');
+
+  return JSON.parse(jsonStr);
+}
+
+async function encodeTournee(data) {
+  const jsonStr = JSON.stringify(data);
+  const keyBytes = new TextEncoder().encode(MAGIC);
+  const payload = bytesToBase64(xorWithKey(new TextEncoder().encode(jsonStr), keyBytes));
+  const checksum = await sha256Hex(new TextEncoder().encode(jsonStr));
+  return JSON.stringify({ magic: MAGIC, version: 1, checksum, payload });
+}
+
+// ---------- État ----------
+let tournee = null;
+let map, polyline, markers = [];
+
+function setStatus(msg, kind) {
+  const el = document.getElementById('status');
+  el.textContent = msg || '';
+  el.className = kind || '';
+}
+
+// ---------- Chargement ----------
+const dropzone = document.getElementById('dropzone');
+const fileInput = document.getElementById('file-input');
+
+dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('dragover', e => { e.preventDefault(); dropzone.classList.add('dragover'); });
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('dragover'));
+dropzone.addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.classList.remove('dragover');
+  if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length) loadFile(fileInput.files[0]);
+});
+document.getElementById('btn-new-load').addEventListener('click', () => {
+  document.getElementById('app-content').style.display = 'none';
+  document.getElementById('loader').style.display = 'block';
+  document.getElementById('btn-export').disabled = true;
+  setStatus('');
+});
+
+async function loadFile(file) {
+  if (!file.name.endsWith('.tournee')) {
+    setStatus("Ce fichier n'a pas l'extension .tournee.", 'error');
+    return;
+  }
+  try {
+    const text = await file.text();
+    tournee = await decodeTournee(text);
+    setStatus('Tournée chargée : ' + file.name, 'ok');
+    showApp();
+  } catch (err) {
+    setStatus(err.message || 'Erreur de lecture du fichier.', 'error');
+  }
+}
+
+// ---------- Affichage ----------
+function showApp() {
+  document.getElementById('loader').style.display = 'none';
+  document.getElementById('app-content').style.display = 'block';
+  document.getElementById('btn-export').disabled = false;
+
+  document.getElementById('tournee-name').value = tournee.tourneeName || '';
+  const dayCount = Object.keys(tournee.days || {}).length;
+  document.getElementById('days-hint').textContent =
+    dayCount + ' journée' + (dayCount > 1 ? 's' : '') + ' enregistrée' + (dayCount > 1 ? 's' : '') +
+    " (checklists/notes du jour non modifiables ici, préservées telles quelles).";
+
+  initMap();
+  renderStops();
+  renderChecklist();
+}
+
+document.getElementById('tournee-name').addEventListener('input', e => {
+  tournee.tourneeName = e.target.value;
+});
+
+// ---------- Carte ----------
+function initMap() {
+  if (map) { map.remove(); }
+  map = L.map('map').setView([46.6, 2.2], 5);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; OpenStreetMap contributors',
+    maxZoom: 19,
+  }).addTo(map);
+
+  const points = tournee.route.points || [];
+  if (points.length >= 2) {
+    polyline = L.polyline(points.map(p => [p.lat, p.lng]), { color: '#636363', weight: 4, opacity: 0.6 }).addTo(map);
+  }
+
+  // La vue est cadrée sur les arrêts/le tracé par refreshMapMarkers(),
+  // appelée juste après via renderStops().
+  map.on('click', e => addStop(e.latlng.lat, e.latlng.lng));
+}
+
+function refreshMapMarkers() {
+  markers.forEach(m => m.remove());
+  markers = [];
+  const stops = tournee.route.stops || [];
+  const bounds = [];
+  stops.forEach((s, i) => {
+    const marker = L.marker([s.lat, s.lng], { draggable: true })
+      .addTo(map)
+      .bindTooltip(String(i + 1), { permanent: true, direction: 'top', className: 'stop-tooltip' });
+    marker.on('dragend', () => {
+      const pos = marker.getLatLng();
+      s.lat = pos.lat;
+      s.lng = pos.lng;
+      renderStops();
+    });
+    markers.push(marker);
+    bounds.push([s.lat, s.lng]);
+  });
+  if (polyline) bounds.push(...polyline.getLatLngs().map(p => [p.lat, p.lng]));
+  if (bounds.length) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 17 });
+}
+
+// ---------- Arrêts ----------
+function addStop(lat, lng) {
+  if (!tournee.route.stops) tournee.route.stops = [];
+  const n = tournee.route.stops.length + 1;
+  tournee.route.stops.push({ lat, lng, label: 'Arrêt ' + n, note: '' });
+  Object.values(tournee.days || {}).forEach(day => day.visited.push(false));
+  renderStops();
+}
+
+function deleteStop(index) {
+  tournee.route.stops.splice(index, 1);
+  Object.values(tournee.days || {}).forEach(day => {
+    if (index < day.visited.length) day.visited.splice(index, 1);
+  });
+  renderStops();
+}
+
+function moveStop(index, delta) {
+  const stops = tournee.route.stops;
+  const target = index + delta;
+  if (target < 0 || target >= stops.length) return;
+  [stops[index], stops[target]] = [stops[target], stops[index]];
+  Object.values(tournee.days || {}).forEach(day => {
+    if (day.visited.length === stops.length) {
+      [day.visited[index], day.visited[target]] = [day.visited[target], day.visited[index]];
+    }
+  });
+  renderStops();
+}
+
+function renderStops() {
+  const stops = tournee.route.stops || [];
+  document.getElementById('stops-count').textContent = stops.length;
+  const body = document.getElementById('stops-body');
+  body.innerHTML = '';
+
+  stops.forEach((s, i) => {
+    const tr = document.createElement('tr');
+
+    const tdIdx = document.createElement('td');
+    tdIdx.textContent = i + 1;
+    tdIdx.style.color = 'var(--ink-soft)';
+    tdIdx.style.fontSize = '12px';
+    tr.appendChild(tdIdx);
+
+    tr.appendChild(makeTextCell(s.label, v => { s.label = v; }));
+    tr.appendChild(makeTextCell(s.note, v => { s.note = v; }));
+    tr.appendChild(makeNumberCell(s.lat, v => { s.lat = v; refreshMapMarkers(); }));
+    tr.appendChild(makeNumberCell(s.lng, v => { s.lng = v; refreshMapMarkers(); }));
+
+    const tdActions = document.createElement('td');
+    tdActions.className = 'actions';
+    tdActions.innerHTML = '';
+    const up = smallBtn('↑', () => moveStop(i, -1));
+    const down = smallBtn('↓', () => moveStop(i, 1));
+    const del = smallBtn('✕', () => deleteStop(i), true);
+    tdActions.append(up, down, del);
+    tr.appendChild(tdActions);
+
+    body.appendChild(tr);
+  });
+
+  refreshMapMarkers();
+}
+
+function makeTextCell(value, onChange) {
+  const td = document.createElement('td');
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = value || '';
+  input.addEventListener('input', () => onChange(input.value));
+  td.appendChild(input);
+  return td;
+}
+
+function makeNumberCell(value, onChange) {
+  const td = document.createElement('td');
+  td.className = 'narrow';
+  const input = document.createElement('input');
+  input.type = 'number';
+  input.step = 'any';
+  input.value = value;
+  input.addEventListener('change', () => onChange(parseFloat(input.value)));
+  td.appendChild(input);
+  return td;
+}
+
+function smallBtn(label, onClick, danger) {
+  const b = document.createElement('button');
+  b.textContent = label;
+  b.style.padding = '4px 8px';
+  b.style.marginRight = '4px';
+  b.style.fontSize = '12px';
+  if (danger) b.classList.add('danger-outline');
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+// ---------- Checklist par défaut ----------
+function renderChecklist() {
+  const items = tournee.checklistTemplate || [];
+  const body = document.getElementById('checklist-body');
+  body.innerHTML = '';
+  items.forEach((label, i) => {
+    const tr = document.createElement('tr');
+    tr.appendChild(makeTextCell(label, v => { items[i] = v; }));
+    const tdActions = document.createElement('td');
+    tdActions.className = 'actions';
+    tdActions.appendChild(smallBtn('✕', () => { items.splice(i, 1); renderChecklist(); }, true));
+    tr.appendChild(tdActions);
+    body.appendChild(tr);
+  });
+}
+
+document.getElementById('checklist-add').addEventListener('click', () => {
+  const input = document.getElementById('checklist-new');
+  const v = input.value.trim();
+  if (!v) return;
+  if (!tournee.checklistTemplate) tournee.checklistTemplate = [];
+  tournee.checklistTemplate.push(v);
+  input.value = '';
+  renderChecklist();
+});
+
+// ---------- Export ----------
+document.getElementById('btn-export').addEventListener('click', async () => {
+  const content = await encodeTournee(tournee);
+  const safeName = (tournee.tourneeName || 'tournee').replace(/[^\w\-]+/g, '_');
+  const blob = new Blob([content], { type: 'application/octet-stream' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = safeName + '.tournee';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+});
+</script>
+</body>
+</html>

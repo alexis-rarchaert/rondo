@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app_state.dart';
+import '../models.dart';
 import '../theme.dart';
 import '../widgets/osm_route_map.dart';
 import 'package_scan_screen.dart';
@@ -275,7 +276,7 @@ class _RecordPanel extends StatelessWidget {
             return _RowCard(
               colors: colors,
               leading: Text('${i + 1}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: colors.inkSoft)),
-              title: s.label,
+              title: stopDisplayLabel(s, i),
               subtitle: s.note.isNotEmpty ? s.note : null,
               trailing: IconButton(
                 icon: Icon(Icons.close, size: 18, color: colors.inkSoft),
@@ -468,7 +469,8 @@ class _FollowPanel extends StatelessWidget {
                           style: TextStyle(fontSize: 10, letterSpacing: 1.2, color: colors.inkSoft)),
                       const SizedBox(height: 2),
                       Text(
-                        stops[nextIdx].label + (stops[nextIdx].note.isNotEmpty ? ' — ${stops[nextIdx].note}' : ''),
+                        stopDisplayLabel(stops[nextIdx], nextIdx) +
+                            (stops[nextIdx].note.isNotEmpty ? ' — ${stops[nextIdx].note}' : ''),
                         style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                       ),
                     ],
@@ -509,7 +511,7 @@ class _FollowPanel extends StatelessWidget {
             done: day.visited[i],
             highlighted: i == nextIdx,
             leading: Text('${i + 1}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: colors.inkSoft)),
-            title: s.label,
+            title: stopDisplayLabel(s, i),
             subtitle: s.note.isNotEmpty ? s.note : null,
             distanceText: d != null ? (d < 1000 ? '${d.round()} m' : '${(d / 1000).toStringAsFixed(1)} km') : null,
             trailing: GestureDetector(

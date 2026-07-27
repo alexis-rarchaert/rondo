@@ -380,8 +380,9 @@ class AppState extends ChangeNotifier {
 
   void markStop(String note) {
     if (lastPos == null) return;
-    final n = data.route.stops.length + 1;
-    data.route.stops.add(Stop(lat: lastPos!.lat, lng: lastPos!.lng, label: 'Arrêt $n', note: note));
+    // Pas de "Arrêt N" stocké ici : le nom affiché est calculé à la volée par
+    // stopDisplayLabel() à partir de la position actuelle dans la liste.
+    data.route.stops.add(Stop(lat: lastPos!.lat, lng: lastPos!.lng, label: '', note: note));
     for (final day in data.days.values) {
       day.visited.add(false);
     }

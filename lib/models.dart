@@ -32,6 +32,15 @@ class Stop {
       );
 }
 
+// Nom affiché d'un arrêt : le libellé donné par l'utilisateur (OCR, saisie
+// manuelle...) s'il existe, sinon "Arrêt N" calculé à partir de la position
+// ACTUELLE dans la liste — jamais stocké tel quel, pour ne jamais désynchroniser
+// le nom affiché de son numéro après une suppression ou un réordonnancement.
+String stopDisplayLabel(Stop stop, int index) {
+  final label = stop.label.trim();
+  return label.isEmpty ? 'Arrêt ${index + 1}' : label;
+}
+
 class ChecklistItem {
   String label;
   bool done;

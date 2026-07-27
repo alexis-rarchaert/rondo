@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../app_state.dart';
+import '../models.dart';
 import '../theme.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -154,7 +155,7 @@ class _ReorderStopsCard extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(s.label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
+                      Text(stopDisplayLabel(s, i), style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14.5)),
                       if (s.note.isNotEmpty)
                         Text(s.note, style: TextStyle(fontSize: 12.5, color: colors.inkSoft)),
                     ],

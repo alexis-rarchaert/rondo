@@ -43,6 +43,9 @@ class AppState extends ChangeNotifier {
   String? _nextStreetName;
   bool _geocodingTurn = false;
 
+  String? _cachedTurnDirection;
+  LatLng? _cachedTurnLatLng;
+
   String? get nextStreetName => _nextStreetName;
 
   bool get voiceGuidanceEnabled => _voiceGuidanceEnabled;
@@ -431,6 +434,8 @@ class AppState extends ChangeNotifier {
       points[startIdx + 1].lng,
     );
 
+    // 1. Scan ahead for upcoming turns
+    TurnGuidance? upcoming;
     var cumulative = 0.0;
     var lastSampleDist = 0.0;
     for (var i = startIdx + 1; i < points.length; i++) {
@@ -453,14 +458,43 @@ class AppState extends ChangeNotifier {
 
       if (delta.abs() >= _turnThresholdDeg) {
         final direction = delta > 0 ? 'droite' : 'gauche';
-        return TurnGuidance(
+        upcoming = TurnGuidance(
           distance: cumulative,
           direction: direction,
           turnLatLng: LatLng(points[i].lat, points[i].lng),
         );
+        break;
       }
       if (cumulative >= _turnLookaheadMeters) break;
     }
+
+    // 2. Cache and Hysteresis Logic
+    if (upcoming != null) {
+      _cachedTurnDirection = upcoming.direction;
+      _cachedTurnLatLng = upcoming.turnLatLng;
+      return upcoming;
+    }
+
+    // If no upcoming turn is found, check if we are still close to the last cached turn
+    if (_cachedTurnDirection != null && _cachedTurnLatLng != null) {
+      final distToCached = Geolocator.distanceBetween(
+        lastPos!.lat, lastPos!.lng,
+        _cachedTurnLatLng!.lat, _cachedTurnLatLng!.lng
+      );
+      // Keep showing turn if within 20m of the turn point
+      if (distToCached <= 20) {
+        return TurnGuidance(
+          distance: distToCached,
+          direction: _cachedTurnDirection!,
+          turnLatLng: _cachedTurnLatLng,
+        );
+      } else {
+        // Moved past turn or too far, reset cache
+        _cachedTurnDirection = null;
+        _cachedTurnLatLng = null;
+      }
+    }
+
     return const TurnGuidance(distance: 0, direction: 'tout droit');
   }
 

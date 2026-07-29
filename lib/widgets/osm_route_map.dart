@@ -269,7 +269,7 @@ class _OsmRouteMapState extends State<OsmRouteMap> {
           if (widget.navigate)
             Positioned(
               right: 8,
-              bottom: 56,
+              bottom: 168,
               child: FloatingActionButton.small(
                 heroTag: 'follow_toggle',
                 backgroundColor: _autoFollow ? widget.colors.accent : widget.colors.paperRaised,
@@ -286,7 +286,7 @@ class _OsmRouteMapState extends State<OsmRouteMap> {
             ),
           Positioned(
             right: 8,
-            bottom: 8,
+            bottom: widget.navigate ? 120 : 8,
             child: FloatingActionButton.small(
               heroTag: 'recenter_map',
               backgroundColor: widget.colors.paperRaised,

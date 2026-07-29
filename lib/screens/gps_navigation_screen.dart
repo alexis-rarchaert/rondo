@@ -25,17 +25,20 @@ class GpsNavigationScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final app = context.watch<AppState>();
-    final colors = Theme.of(context).brightness == Brightness.dark ? AppColors.dark : AppColors.light;
+    final colors = Theme.of(context).brightness == Brightness.dark
+        ? AppColors.dark
+        : AppColors.light;
     final route = app.data.route;
 
     // Get current turn guidance details
     final guidance = app.nextTurnGuidance;
-    final hasTurnAction = guidance != null && guidance.direction != 'tout droit';
+    final hasTurnAction =
+        guidance != null && guidance.direction != 'tout droit';
 
     final distText = guidance != null
         ? (guidance.distance < 1000
-            ? '${guidance.distance.round()} m'
-            : '${(guidance.distance / 1000).toStringAsFixed(1)} km')
+              ? '${guidance.distance.round()} m'
+              : '${(guidance.distance / 1000).toStringAsFixed(1)} km')
         : '';
 
     // Next street or description
@@ -104,7 +107,11 @@ class GpsNavigationScreen extends StatelessWidget {
                   Container(
                     decoration: BoxDecoration(
                       color: const Color(0xFF003DA5), // Bleu La Poste
-                      borderRadius: BorderRadius.circular(kRadius + 4),
+                      borderRadius: BorderRadius.vertical(
+                        top: Radius.circular(
+                          kRadius + 4,
+                        ), // Applique le radius uniquement en haut
+                      ),
                       boxShadow: const [
                         BoxShadow(
                           color: Colors.black38,
@@ -113,7 +120,10 @@ class GpsNavigationScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     child: Row(
                       children: [
                         // Turn direction icon on the left
@@ -174,13 +184,13 @@ class GpsNavigationScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(height: 8),
-                  // Current street name block (large text under top block)
                   Container(
                     width: double.infinity,
                     decoration: BoxDecoration(
                       color: colors.paper,
-                      borderRadius: BorderRadius.circular(kRadius + 4),
+                      borderRadius: BorderRadius.vertical(
+    bottom: Radius.circular(kRadius + 4), // Applique le radius uniquement en haut
+  ),
                       border: Border.all(color: colors.line),
                       boxShadow: const [
                         BoxShadow(
@@ -190,9 +200,12 @@ class GpsNavigationScreen extends StatelessWidget {
                         ),
                       ],
                     ),
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
@@ -202,8 +215,8 @@ class GpsNavigationScreen extends StatelessWidget {
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             color: colors.ink,
-                            fontSize: 20,
-                            fontWeight: FontWeight.w900,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w800,
                             fontFamily: 'Montserrat',
                           ),
                         ),
@@ -248,7 +261,10 @@ class GpsNavigationScreen extends StatelessWidget {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(100),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 24,
+                    vertical: 14,
+                  ),
                   elevation: 4,
                   shadowColor: Colors.black38,
                 ),

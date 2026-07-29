@@ -172,8 +172,28 @@ class GpsNavigationScreen extends StatelessWidget {
               ),
             ),
           ),
+          // 3. TTS FLOATING ACTION BUTTON (ABOVE RECENTER & FOLLOW MODE BUTTONS)
+          Positioned(
+            right: 8,
+            bottom: 216,
+            child: FloatingActionButton.small(
+              heroTag: 'tts_toggle',
+              backgroundColor: colors.paperRaised,
+              foregroundColor: colors.live,
+              elevation: 1,
+              onPressed: () {
+                app.voiceGuidanceEnabled = !app.voiceGuidanceEnabled;
+              },
+              child: Icon(
+                app.voiceGuidanceEnabled
+                    ? Icons.volume_up_rounded
+                    : Icons.volume_off_rounded,
+                size: 20,
+              ),
+            ),
+          ),
 
-          // 3. BOTTOM PANEL (CURRENT STREET & QUIT BUTTON)
+          // 4. BOTTOM PANEL (CURRENT STREET & QUIT BUTTON)
           Positioned(
             bottom: 0,
             left: 0,
@@ -207,20 +227,6 @@ class GpsNavigationScreen extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 child: Row(
                   children: [
-                    // Speaker status / toggle
-                    IconButton(
-                      icon: Icon(
-                        app.voiceGuidanceEnabled
-                            ? Icons.volume_up_rounded
-                            : Icons.volume_off_rounded,
-                        color: colors.inkSoft,
-                        size: 24,
-                      ),
-                      onPressed: () {
-                        app.voiceGuidanceEnabled = !app.voiceGuidanceEnabled;
-                      },
-                    ),
-                    const SizedBox(width: 8),
                     // Current street display
                     Expanded(
                       child: Column(

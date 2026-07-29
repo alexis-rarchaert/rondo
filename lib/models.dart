@@ -19,16 +19,24 @@ class Stop {
   double lng;
   String label;
   String note;
+  double? radius;
 
-  Stop({required this.lat, required this.lng, required this.label, this.note = ''});
+  Stop({required this.lat, required this.lng, required this.label, this.note = '', this.radius});
 
-  Map<String, dynamic> toJson() => {'lat': lat, 'lng': lng, 'label': label, 'note': note};
+  Map<String, dynamic> toJson() => {
+        'lat': lat,
+        'lng': lng,
+        'label': label,
+        'note': note,
+        if (radius != null) 'radius': radius,
+      };
 
   factory Stop.fromJson(Map<String, dynamic> j) => Stop(
         lat: (j['lat'] as num).toDouble(),
         lng: (j['lng'] as num).toDouble(),
         label: j['label'] as String,
         note: (j['note'] as String?) ?? '',
+        radius: j['radius'] != null ? (j['radius'] as num).toDouble() : null,
       );
 }
 
@@ -92,12 +100,24 @@ class DayData {
 class RouteModel {
   List<RoutePoint> points;
   List<Stop> stops;
+  Stop? startPoint;
+  Stop? endPoint;
+  Stop? uTurnZone;
 
-  RouteModel({required this.points, required this.stops});
+  RouteModel({
+    required this.points,
+    required this.stops,
+    this.startPoint,
+    this.endPoint,
+    this.uTurnZone,
+  });
 
   Map<String, dynamic> toJson() => {
         'points': points.map((e) => e.toJson()).toList(),
         'stops': stops.map((e) => e.toJson()).toList(),
+        if (startPoint != null) 'startPoint': startPoint!.toJson(),
+        if (endPoint != null) 'endPoint': endPoint!.toJson(),
+        if (uTurnZone != null) 'uTurnZone': uTurnZone!.toJson(),
       };
 
   factory RouteModel.fromJson(Map<String, dynamic> j) => RouteModel(
@@ -106,6 +126,9 @@ class RouteModel {
             .toList(),
         stops:
             (j['stops'] as List).map((e) => Stop.fromJson(e as Map<String, dynamic>)).toList(),
+        startPoint: j['startPoint'] != null ? Stop.fromJson(j['startPoint'] as Map<String, dynamic>) : null,
+        endPoint: j['endPoint'] != null ? Stop.fromJson(j['endPoint'] as Map<String, dynamic>) : null,
+        uTurnZone: j['uTurnZone'] != null ? Stop.fromJson(j['uTurnZone'] as Map<String, dynamic>) : null,
       );
 }
 

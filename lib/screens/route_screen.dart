@@ -149,6 +149,9 @@ class _MapBox extends StatelessWidget {
         nextStopIndex: nextStopIndex,
         colors: colors,
         navigate: navigate,
+        startPoint: app.data.route.startPoint,
+        endPoint: app.data.route.endPoint,
+        uTurnZone: app.data.route.uTurnZone,
       ),
     );
   }

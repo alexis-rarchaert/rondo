@@ -161,7 +161,7 @@
   .stops-card {
     position: sticky;
     top: 84px;
-    max-height: calc(100vh - 104px);
+    height: 620px; /* même hauteur fixe que #map, pour un alignement stable */
     display: flex;
     flex-direction: column;
   }
@@ -201,6 +201,10 @@
     border-radius: 50%;
     box-shadow: 0 0 0 1px var(--live);
     cursor: pointer;
+  }
+  .direction-arrow-icon {
+    background: transparent;
+    border: none;
   }
   #print-title { display: none; }
   #print-title h2 { font-family: Montserrat, sans-serif; font-size: 20px; margin: 0 0 2px; }
@@ -255,6 +259,47 @@
         <div class="section-label">Tournée</div>
         <input type="text" id="tournee-name" placeholder="Nom de la tournée">
         <p class="hint" id="days-hint"></p>
+      </div>
+
+      <div class="card">
+        <div class="section-label">Points clés de la tournée</div>
+        <div class="key-points-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+          <div style="background: var(--paper); border: 1px solid var(--line); padding: 12px; border-radius: var(--radius);">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+              <span style="display:inline-block; width:10px; height:10px; background:#10B981; border-radius:50%;"></span>
+              Début de la tournée
+            </div>
+            <div id="start-point-info" style="font-size: 13px; color: var(--ink-soft); min-height: 20px; margin-bottom: 10px;">Non défini</div>
+            <div class="row">
+              <button id="btn-set-start" class="btn primary" style="padding: 6px 12px; font-size: 12px;">Placer</button>
+              <button id="btn-del-start" class="btn danger-outline" style="padding: 6px 12px; font-size: 12px; display:none;">Supprimer</button>
+            </div>
+          </div>
+          
+          <div style="background: var(--paper); border: 1px solid var(--line); padding: 12px; border-radius: var(--radius);">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+              <span style="display:inline-block; width:10px; height:10px; background:#EF4444; border-radius:50%;"></span>
+              Fin de la tournée
+            </div>
+            <div id="end-point-info" style="font-size: 13px; color: var(--ink-soft); min-height: 20px; margin-bottom: 10px;">Non défini</div>
+            <div class="row">
+              <button id="btn-set-end" class="btn primary" style="padding: 6px 12px; font-size: 12px;">Placer</button>
+              <button id="btn-del-end" class="btn danger-outline" style="padding: 6px 12px; font-size: 12px; display:none;">Supprimer</button>
+            </div>
+          </div>
+          
+          <div style="background: var(--paper); border: 1px solid var(--line); padding: 12px; border-radius: var(--radius);">
+            <div style="font-weight: 700; font-size: 14px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+              <span style="font-size: 12px;">↩️</span>
+              Zone de demi-tour
+            </div>
+            <div id="uturn-zone-info" style="font-size: 13px; color: var(--ink-soft); min-height: 20px; margin-bottom: 10px;">Non définie</div>
+            <div class="row">
+              <button id="btn-set-uturn" class="btn primary" style="padding: 6px 12px; font-size: 12px;">Placer</button>
+              <button id="btn-del-uturn" class="btn danger-outline" style="padding: 6px 12px; font-size: 12px; display:none;">Supprimer</button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="edit-grid">
@@ -432,6 +477,11 @@ document.getElementById('btn-new-load').addEventListener('click', () => {
   document.getElementById('header-actions').style.display = 'none';
   document.getElementById('loader').style.display = 'block';
   setStatus('');
+  placementMode = null;
+  if (startMarker) { startMarker.remove(); startMarker = null; }
+  if (endMarker) { endMarker.remove(); endMarker = null; }
+  if (uturnMarker) { uturnMarker.remove(); uturnMarker = null; }
+  if (uturnCircle) { uturnCircle.remove(); uturnCircle = null; }
 });
 
 async function loadFile(file) {
@@ -482,6 +532,8 @@ function showApp() {
   initMap();
   renderStops();
   renderChecklist();
+  updateKeyPointsUI();
+  refreshKeyPointsMarkers();
 }
 
 document.getElementById('tournee-name').addEventListener('input', e => {
@@ -495,6 +547,34 @@ document.getElementById('tournee-name').addEventListener('input', e => {
 // de points). Évite toute ambiguïté sur ce que fait un clic.
 let mapMode = 'stops';
 let trackMarkers = [];
+let directionArrows = [];
+let placementMode = null; // 'start', 'end', 'uturn', or null
+let startMarker = null;
+let endMarker = null;
+let uturnMarker = null;
+let uturnCircle = null;
+
+// Custom Icons
+const startIcon = L.divIcon({
+  className: 'custom-keypoint-icon',
+  html: '<div style="background-color: #10B981; border: 2px solid white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.3); font-weight: bold; color: white; font-size: 13px;">D</div>',
+  iconSize: [30, 30],
+  iconAnchor: [15, 15]
+});
+
+const endIcon = L.divIcon({
+  className: 'custom-keypoint-icon',
+  html: '<div style="background-color: #EF4444; border: 2px solid white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.3); font-weight: bold; color: white; font-size: 13px;">F</div>',
+  iconSize: [30, 30],
+  iconAnchor: [15, 15]
+});
+
+const uturnIcon = L.divIcon({
+  className: 'custom-keypoint-icon',
+  html: '<div style="background-color: #3B82F6; border: 2px solid white; width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 2px 6px rgba(0,0,0,0.3); font-size: 16px;">↩️</div>',
+  iconSize: [30, 30],
+  iconAnchor: [15, 15]
+});
 
 function setMapMode(mode) {
   mapMode = mode;
@@ -503,7 +583,13 @@ function setMapMode(mode) {
   document.getElementById('map-mode-hint').textContent = mode === 'stops'
     ? 'Clique pour ajouter un arrêt, glisse un marqueur pour le déplacer.'
     : 'Clique sur le tracé pour y insérer un point, clique un point existant pour le supprimer.';
+  // Un seul type de marqueur affiché à la fois : les points de tracé
+  // (potentiellement des milliers) polluent la vue en mode "Arrêts", et
+  // inversement les arrêts gênent la manipulation du tracé.
+  refreshMapMarkers();
   refreshTrackMarkers();
+  refreshDirectionArrows();
+  refreshKeyPointsMarkers();
 }
 
 document.getElementById('mode-stops').addEventListener('click', () => setMapMode('stops'));
@@ -511,7 +597,7 @@ document.getElementById('mode-track').addEventListener('click', () => setMapMode
 
 function initMap() {
   if (map) { map.remove(); }
-  map = L.map('map').setView([46.6, 2.2], 5);
+  map = L.map('map', { preferCanvas: true }).setView([46.6, 2.2], 5);
   L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; OpenStreetMap contributors',
     maxZoom: 19,
@@ -523,8 +609,17 @@ function initMap() {
   // La vue est cadrée sur les arrêts/le tracé par refreshMapMarkers(),
   // appelée juste après via renderStops().
   map.on('click', e => {
-    if (mapMode === 'stops') addStop(e.latlng.lat, e.latlng.lng);
-    else insertTrackPoint(e.latlng);
+    if (placementMode === 'start') {
+      setStartPoint(e.latlng.lat, e.latlng.lng);
+    } else if (placementMode === 'end') {
+      setEndPoint(e.latlng.lat, e.latlng.lng);
+    } else if (placementMode === 'uturn') {
+      setUTurnZone(e.latlng.lat, e.latlng.lng);
+    } else if (mapMode === 'stops') {
+      addStop(e.latlng.lat, e.latlng.lng);
+    } else {
+      insertTrackPoint(e.latlng);
+    }
   });
   setMapMode('stops');
 }
@@ -532,6 +627,47 @@ function initMap() {
 function redrawTrackLine() {
   const points = tournee.route.points || [];
   polyline.setLatLngs(points.length >= 2 ? points.map(p => [p.lat, p.lng]) : []);
+  refreshDirectionArrows();
+}
+
+// Un chevron tous les DIR_ARROW_STEP points, placé au milieu du segment
+// [i, i+1] et orienté selon le cap de ce même segment — repère du sens de
+// marche, indispensable pour se retrouver dans un tracé de plusieurs
+// milliers de points bruts. bearingBetween() est définie plus bas (section
+// "Cahier de tournée") mais les déclarations de fonction sont hissées, donc
+// disponible ici sans réorganiser le fichier.
+const DIR_ARROW_STEP = 5;
+
+function refreshDirectionArrows() {
+  directionArrows.forEach(m => m.remove());
+  directionArrows = [];
+  if (mapMode !== 'track') return;
+
+  const points = tournee.route.points || [];
+  for (let i = 0; i + 1 < points.length; i += DIR_ARROW_STEP) {
+    const a = points[i];
+    const next = points[i + 1];
+    if (a.lat === next.lat && a.lng === next.lng) continue;
+    const bearing = bearingBetween(a.lat, a.lng, next.lat, next.lng);
+    const mid = { lat: (a.lat + next.lat) / 2, lng: (a.lng + next.lng) / 2 };
+    // Triangle CSS plutôt qu'un glyphe unicode : rendu net et identique dans
+    // tous les navigateurs, contrairement à "↑" qui varie selon la police
+    // système et reste trop fin pour se voir sur le fond de carte.
+    const icon = L.divIcon({
+      className: 'direction-arrow-icon',
+      html: '<div style="width:22px; height:22px; transform: rotate(' + bearing.toFixed(0) + 'deg);">' +
+        '<div style="margin:2px auto 0; width:0; height:0; ' +
+        'border-left:7px solid transparent; border-right:7px solid transparent; ' +
+        'border-bottom:16px solid var(--danger); ' +
+        'filter: drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff) drop-shadow(0 0 1.5px #fff);">' +
+        '</div></div>',
+      iconSize: [22, 22],
+      iconAnchor: [11, 11],
+    });
+    directionArrows.push(
+      L.marker([mid.lat, mid.lng], { icon, interactive: false, keyboard: false }).addTo(map),
+    );
+  }
 }
 
 function refreshMapMarkers() {
@@ -540,20 +676,30 @@ function refreshMapMarkers() {
   const stops = tournee.route.stops || [];
   const bounds = [];
   stops.forEach((s, i) => {
+    bounds.push([s.lat, s.lng]);
+    if (mapMode !== 'stops') return;
     const marker = L.marker([s.lat, s.lng], { draggable: true })
       .addTo(map)
       .bindTooltip((i + 1) + '. ' + stopDisplayLabel(s, i), { permanent: false, direction: 'top' });
+    // Pas de renderStops() ici : la table n'affiche ni lat ni lng, et le
+    // marqueur a déjà bougé visuellement. Rebuild inutile (coûteux avec
+    // beaucoup d'arrêts, et ça recentrait la carte à chaque glissé).
     marker.on('dragend', () => {
       const pos = marker.getLatLng();
       s.lat = pos.lat;
       s.lng = pos.lng;
-      renderStops();
     });
     markers.push(marker);
-    bounds.push([s.lat, s.lng]);
   });
   const points = tournee.route.points || [];
   if (points.length) bounds.push(...points.map(p => [p.lat, p.lng]));
+  
+  if (tournee && tournee.route) {
+    if (tournee.route.startPoint) bounds.push([tournee.route.startPoint.lat, tournee.route.startPoint.lng]);
+    if (tournee.route.endPoint) bounds.push([tournee.route.endPoint.lat, tournee.route.endPoint.lng]);
+    if (tournee.route.uTurnZone) bounds.push([tournee.route.uTurnZone.lat, tournee.route.uTurnZone.lng]);
+  }
+
   if (bounds.length) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 17 });
 }
 
@@ -736,6 +882,24 @@ document.getElementById('checklist-add').addEventListener('click', () => {
   renderChecklist();
 });
 
+document.getElementById('btn-set-start').addEventListener('click', () => {
+  placementMode = 'start';
+  resetMapModeHint();
+});
+document.getElementById('btn-del-start').addEventListener('click', deleteStartPoint);
+
+document.getElementById('btn-set-end').addEventListener('click', () => {
+  placementMode = 'end';
+  resetMapModeHint();
+});
+document.getElementById('btn-del-end').addEventListener('click', deleteEndPoint);
+
+document.getElementById('btn-set-uturn').addEventListener('click', () => {
+  placementMode = 'uturn';
+  resetMapModeHint();
+});
+document.getElementById('btn-del-uturn').addEventListener('click', deleteUTurnZone);
+
 // ---------- Export ----------
 document.getElementById('btn-export').addEventListener('click', async () => {
   const content = await encodeTournee(tournee);
@@ -750,6 +914,188 @@ document.getElementById('btn-export').addEventListener('click', async () => {
   a.remove();
   URL.revokeObjectURL(url);
 });
+
+// ---------- Points clés (Début, Fin, Demi-tour) ----------
+function setStartPoint(lat, lng) {
+  if (!tournee.route) tournee.route = { points: [], stops: [] };
+  tournee.route.startPoint = { lat, lng, label: 'Début', note: '' };
+  placementMode = null;
+  updateKeyPointsUI();
+  refreshKeyPointsMarkers();
+  resetMapModeHint();
+}
+
+function setEndPoint(lat, lng) {
+  if (!tournee.route) tournee.route = { points: [], stops: [] };
+  tournee.route.endPoint = { lat, lng, label: 'Fin', note: '' };
+  placementMode = null;
+  updateKeyPointsUI();
+  refreshKeyPointsMarkers();
+  resetMapModeHint();
+}
+
+function setUTurnZone(lat, lng) {
+  if (!tournee.route) tournee.route = { points: [], stops: [] };
+  const currentRadius = tournee.route.uTurnZone ? (tournee.route.uTurnZone.radius || 30) : 30;
+  tournee.route.uTurnZone = { lat, lng, label: 'Demi-tour', note: '', radius: currentRadius };
+  placementMode = null;
+  updateKeyPointsUI();
+  refreshKeyPointsMarkers();
+  resetMapModeHint();
+}
+
+function deleteStartPoint() {
+  if (tournee.route) {
+    delete tournee.route.startPoint;
+  }
+  updateKeyPointsUI();
+  refreshKeyPointsMarkers();
+}
+
+function deleteEndPoint() {
+  if (tournee.route) {
+    delete tournee.route.endPoint;
+  }
+  updateKeyPointsUI();
+  refreshKeyPointsMarkers();
+}
+
+function deleteUTurnZone() {
+  if (tournee.route) {
+    delete tournee.route.uTurnZone;
+  }
+  updateKeyPointsUI();
+  refreshKeyPointsMarkers();
+}
+
+function refreshKeyPointsMarkers() {
+  if (startMarker) { startMarker.remove(); startMarker = null; }
+  if (endMarker) { endMarker.remove(); endMarker = null; }
+  if (uturnMarker) { uturnMarker.remove(); uturnMarker = null; }
+  if (uturnCircle) { uturnCircle.remove(); uturnCircle = null; }
+
+  if (!map || !tournee || !tournee.route) return;
+
+  const r = tournee.route;
+
+  if (r.startPoint) {
+    startMarker = L.marker([r.startPoint.lat, r.startPoint.lng], {
+      draggable: true,
+      icon: startIcon
+    }).addTo(map)
+      .bindTooltip("Point de début", { permanent: false, direction: 'top' });
+
+    startMarker.on('dragend', () => {
+      const pos = startMarker.getLatLng();
+      r.startPoint.lat = pos.lat;
+      r.startPoint.lng = pos.lng;
+      updateKeyPointsUI();
+    });
+  }
+
+  if (r.endPoint) {
+    endMarker = L.marker([r.endPoint.lat, r.endPoint.lng], {
+      draggable: true,
+      icon: endIcon
+    }).addTo(map)
+      .bindTooltip("Point de fin", { permanent: false, direction: 'top' });
+
+    endMarker.on('dragend', () => {
+      const pos = endMarker.getLatLng();
+      r.endPoint.lat = pos.lat;
+      r.endPoint.lng = pos.lng;
+      updateKeyPointsUI();
+    });
+  }
+
+  if (r.uTurnZone) {
+    uturnMarker = L.marker([r.uTurnZone.lat, r.uTurnZone.lng], {
+      draggable: true,
+      icon: uturnIcon
+    }).addTo(map)
+      .bindTooltip("Zone de demi-tour", { permanent: false, direction: 'top' });
+
+    const radius = r.uTurnZone.radius || 30;
+    uturnCircle = L.circle([r.uTurnZone.lat, r.uTurnZone.lng], {
+      radius: radius,
+      color: '#3B82F6',
+      fillColor: '#3B82F6',
+      fillOpacity: 0.2,
+      weight: 2
+    }).addTo(map);
+
+    uturnMarker.on('drag', () => {
+      const pos = uturnMarker.getLatLng();
+      if (uturnCircle) uturnCircle.setLatLng(pos);
+    });
+
+    uturnMarker.on('dragend', () => {
+      const pos = uturnMarker.getLatLng();
+      r.uTurnZone.lat = pos.lat;
+      r.uTurnZone.lng = pos.lng;
+      updateKeyPointsUI();
+    });
+  }
+}
+
+function updateKeyPointsUI() {
+  const r = tournee && tournee.route;
+  
+  const startEl = document.getElementById('start-point-info');
+  const startDel = document.getElementById('btn-del-start');
+  if (r && r.startPoint) {
+    startEl.innerHTML = `📍 ${r.startPoint.lat.toFixed(5)}, ${r.startPoint.lng.toFixed(5)}`;
+    startDel.style.display = 'inline-block';
+  } else {
+    startEl.innerHTML = 'Non défini';
+    startDel.style.display = 'none';
+  }
+
+  const endEl = document.getElementById('end-point-info');
+  const endDel = document.getElementById('btn-del-end');
+  if (r && r.endPoint) {
+    endEl.innerHTML = `📍 ${r.endPoint.lat.toFixed(5)}, ${r.endPoint.lng.toFixed(5)}`;
+    endDel.style.display = 'inline-block';
+  } else {
+    endEl.innerHTML = 'Non défini';
+    endDel.style.display = 'none';
+  }
+
+  const uturnEl = document.getElementById('uturn-zone-info');
+  const uturnDel = document.getElementById('btn-del-uturn');
+  if (r && r.uTurnZone) {
+    const radius = r.uTurnZone.radius || 30;
+    uturnEl.innerHTML = `📍 ${r.uTurnZone.lat.toFixed(5)}, ${r.uTurnZone.lng.toFixed(5)}<br/>` +
+      `<label style="font-size:11px; margin-top:4px; display:inline-block;">Rayon : ` +
+      `<input type="number" id="uturn-radius-input" value="${radius}" style="width:50px; padding:2px 4px; display:inline-block; font-size:11px; height:auto;"> m</label>`;
+    uturnDel.style.display = 'inline-block';
+    
+    const radInput = document.getElementById('uturn-radius-input');
+    if (radInput) {
+      radInput.addEventListener('input', e => {
+        const val = parseInt(e.target.value) || 30;
+        r.uTurnZone.radius = val;
+        if (uturnCircle) uturnCircle.setRadius(val);
+      });
+    }
+  } else {
+    uturnEl.innerHTML = 'Non définie';
+    uturnDel.style.display = 'none';
+  }
+}
+
+function resetMapModeHint() {
+  const mapHintEl = document.getElementById('map-mode-hint');
+  if (placementMode === 'start') {
+    mapHintEl.innerHTML = '<strong style="color:var(--live);">Mode Placement : Cliquez sur la carte pour placer le POINT DE DÉBUT.</strong>';
+  } else if (placementMode === 'end') {
+    mapHintEl.innerHTML = '<strong style="color:var(--live);">Mode Placement : Cliquez sur la carte pour placer le POINT DE FIN.</strong>';
+  } else if (placementMode === 'uturn') {
+    mapHintEl.innerHTML = '<strong style="color:var(--live);">Mode Placement : Cliquez sur la carte pour placer la ZONE DE DEMI-TOUR.</strong>';
+  } else {
+    setMapMode(mapMode);
+  }
+}
 
 // ---------- Cahier de tournée ----------
 // Même heuristique de détection de virage que app_state.dart

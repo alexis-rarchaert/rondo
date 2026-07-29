@@ -14,6 +14,9 @@ class OsmRouteMap extends StatefulWidget {
   final double? heading;
   final int? nextStopIndex;
   final AppColors colors;
+  final Stop? startPoint;
+  final Stop? endPoint;
+  final Stop? uTurnZone;
 
   // Mode navigation "vrai GPS" : la caméra suit la position en direct et
   // pivote selon le cap (heading-up), comme sur un GPS de voiture/piéton.
@@ -29,6 +32,9 @@ class OsmRouteMap extends StatefulWidget {
     required this.nextStopIndex,
     required this.colors,
     this.navigate = false,
+    this.startPoint,
+    this.endPoint,
+    this.uTurnZone,
   });
 
   @override
@@ -71,6 +77,9 @@ class _OsmRouteMapState extends State<OsmRouteMap> {
     final bounds = <LatLng>[
       ...points,
       ...widget.stops.map((s) => LatLng(s.lat, s.lng)),
+      if (widget.startPoint != null) LatLng(widget.startPoint!.lat, widget.startPoint!.lng),
+      if (widget.endPoint != null) LatLng(widget.endPoint!.lat, widget.endPoint!.lng),
+      if (widget.uTurnZone != null) LatLng(widget.uTurnZone!.lat, widget.uTurnZone!.lng),
       ?live,
     ];
 
@@ -130,6 +139,19 @@ class _OsmRouteMapState extends State<OsmRouteMap> {
                     ),
                   ],
                 ),
+              if (widget.uTurnZone != null)
+                CircleLayer(
+                  circles: [
+                    CircleMarker(
+                      point: LatLng(widget.uTurnZone!.lat, widget.uTurnZone!.lng),
+                      radius: widget.uTurnZone!.radius ?? 30.0,
+                      useRadiusInMeter: true,
+                      color: Colors.blue.withValues(alpha: 0.25),
+                      borderColor: Colors.blue,
+                      borderStrokeWidth: 2,
+                    ),
+                  ],
+                ),
               MarkerLayer(
                 markers: [
                   for (var i = 0; i < widget.stops.length; i++)
@@ -144,6 +166,30 @@ class _OsmRouteMapState extends State<OsmRouteMap> {
                         isNext: i == widget.nextStopIndex,
                         colors: widget.colors,
                       ),
+                    ),
+                  if (widget.startPoint != null)
+                    Marker(
+                      point: LatLng(widget.startPoint!.lat, widget.startPoint!.lng),
+                      width: 30,
+                      height: 30,
+                      rotate: true,
+                      child: _StartPin(colors: widget.colors),
+                    ),
+                  if (widget.endPoint != null)
+                    Marker(
+                      point: LatLng(widget.endPoint!.lat, widget.endPoint!.lng),
+                      width: 30,
+                      height: 30,
+                      rotate: true,
+                      child: _EndPin(colors: widget.colors),
+                    ),
+                  if (widget.uTurnZone != null)
+                    Marker(
+                      point: LatLng(widget.uTurnZone!.lat, widget.uTurnZone!.lng),
+                      width: 30,
+                      height: 30,
+                      rotate: true,
+                      child: _UTurnPin(colors: widget.colors),
                     ),
                   if (live != null)
                     Marker(
@@ -237,6 +283,63 @@ class _LiveDot extends StatelessWidget {
         border: Border.all(color: Colors.white, width: 3),
         boxShadow: [BoxShadow(color: colors.live.withValues(alpha: 0.5), blurRadius: 6, spreadRadius: 2)],
       ),
+    );
+  }
+}
+
+class _StartPin extends StatelessWidget {
+  final AppColors colors;
+  const _StartPin({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFF10B981),
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1))],
+      ),
+      alignment: Alignment.center,
+      child: const Text('D', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+    );
+  }
+}
+
+class _EndPin extends StatelessWidget {
+  final AppColors colors;
+  const _EndPin({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.red,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1))],
+      ),
+      alignment: Alignment.center,
+      child: const Text('F', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
+    );
+  }
+}
+
+class _UTurnPin extends StatelessWidget {
+  final AppColors colors;
+  const _UTurnPin({required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.blue,
+        shape: BoxShape.circle,
+        border: Border.all(color: Colors.white, width: 2),
+        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 2, offset: Offset(0, 1))],
+      ),
+      alignment: Alignment.center,
+      child: const Icon(Icons.undo, color: Colors.white, size: 16),
     );
   }
 }

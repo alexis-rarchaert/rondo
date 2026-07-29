@@ -6,6 +6,7 @@ import '../models.dart';
 import '../theme.dart';
 import '../widgets/osm_route_map.dart';
 import 'package_scan_screen.dart';
+import 'gps_navigation_screen.dart';
 
 class RouteScreen extends StatefulWidget {
   const RouteScreen({super.key});
@@ -455,7 +456,39 @@ class _FollowPanel extends StatelessWidget {
             colors: colors,
           ),
           const SizedBox(height: 10),
-          _MapBox(colors: colors, navigate: true),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF003DA5), // Bleu La Poste
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(kRadius),
+                ),
+                elevation: 0,
+              ),
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const GpsNavigationScreen()),
+                );
+              },
+              icon: const Icon(Icons.navigation_rounded),
+              label: const Text(
+                'Lancer la navigation GPS (Plein écran)',
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          GestureDetector(
+            onTap: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const GpsNavigationScreen()),
+              );
+            },
+            child: _MapBox(colors: colors, navigate: true),
+          ),
           const SizedBox(height: 16),
           _Empty(
             colors: colors,
@@ -513,7 +546,39 @@ class _FollowPanel extends StatelessWidget {
           colors: colors,
         ),
         const SizedBox(height: 10),
-        _MapBox(colors: colors, nextStopIndex: nextIdx, navigate: true),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF003DA5), // Bleu La Poste
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(kRadius),
+              ),
+              elevation: 0,
+            ),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (_) => const GpsNavigationScreen()),
+              );
+            },
+            icon: const Icon(Icons.navigation_rounded),
+            label: const Text(
+              'Lancer la navigation GPS (Plein écran)',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        GestureDetector(
+          onTap: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const GpsNavigationScreen()),
+            );
+          },
+          child: _MapBox(colors: colors, nextStopIndex: nextIdx, navigate: true),
+        ),
         if (nextIdx != null) ...[
           const SizedBox(height: 12),
           Container(

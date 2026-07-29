@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../app_state.dart' as state;
@@ -74,6 +75,55 @@ class _OsmRouteMapState extends State<OsmRouteMap> {
     final points = widget.track.map((p) => LatLng(p.lat, p.lng)).toList();
     final live = _ll(widget.live);
 
+    // Compute past/future track split
+    List<LatLng> pastTrack = [];
+    List<LatLng> futureTrack = [];
+    final directionMarkers = <Marker>[];
+
+    if (points.isNotEmpty && live != null) {
+      var bestIdx = 0;
+      var bestDist = double.infinity;
+      for (var i = 0; i < points.length; i++) {
+        final d = Geolocator.distanceBetween(
+            live.latitude, live.longitude, points[i].latitude, points[i].longitude);
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = i;
+        }
+      }
+      pastTrack = points.sublist(0, bestIdx + 1);
+      futureTrack = points.sublist(bestIdx);
+    } else {
+      futureTrack = points;
+    }
+
+    // Generate small navigation directional arrow markers along the future track (every 8 points)
+    if (futureTrack.length >= 2) {
+      for (var i = 0; i < futureTrack.length - 1; i += 8) {
+        final p1 = futureTrack[i];
+        final p2 = futureTrack[i + 1];
+        if (p1.latitude == p2.latitude && p1.longitude == p2.longitude) continue;
+        final bearing = Geolocator.bearingBetween(
+            p1.latitude, p1.longitude, p2.latitude, p2.longitude);
+        directionMarkers.add(
+          Marker(
+            point: LatLng((p1.latitude + p2.latitude) / 2, (p1.longitude + p2.longitude) / 2),
+            width: 14,
+            height: 14,
+            rotate: true,
+            child: Transform.rotate(
+              angle: bearing * 3.1415926535 / 180,
+              child: const Icon(
+                Icons.arrow_upward,
+                color: Color(0xFF003DA5), // Bleu La Poste
+                size: 12,
+              ),
+            ),
+          ),
+        );
+      }
+    }
+
     final bounds = <LatLng>[
       ...points,
       ...widget.stops.map((s) => LatLng(s.lat, s.lng)),
@@ -133,11 +183,18 @@ class _OsmRouteMapState extends State<OsmRouteMap> {
               if (points.length >= 2)
                 PolylineLayer(
                   polylines: [
-                    Polyline(
-                      points: points,
-                      color: widget.colors.inkSoft.withValues(alpha: 0.6),
-                      strokeWidth: 4,
-                    ),
+                    if (pastTrack.length >= 2)
+                      Polyline(
+                        points: pastTrack,
+                        color: Colors.grey.withValues(alpha: 0.6),
+                        strokeWidth: 4,
+                      ),
+                    if (futureTrack.length >= 2)
+                      Polyline(
+                        points: futureTrack,
+                        color: const Color(0xFF003DA5), // Bleu La Poste
+                        strokeWidth: 5,
+                      ),
                   ],
                 ),
               if (widget.uTurnZone != null)
@@ -155,6 +212,7 @@ class _OsmRouteMapState extends State<OsmRouteMap> {
                 ),
               MarkerLayer(
                 markers: [
+                  ...directionMarkers,
                   for (var i = 0; i < widget.stops.length; i++)
                     Marker(
                       point: LatLng(widget.stops[i].lat, widget.stops[i].lng),

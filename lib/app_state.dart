@@ -25,8 +25,9 @@ class LatLng {
 
 class TurnGuidance {
   final double distance;
-  final String direction; // 'droite', 'gauche', 'tout droit'
-  const TurnGuidance({required this.distance, required this.direction});
+  final String direction; // 'droite', 'gauche', 'tout droit', 'demi-tour'
+  final LatLng? turnLatLng;
+  const TurnGuidance({required this.distance, required this.direction, this.turnLatLng});
 }
 
 class AppState extends ChangeNotifier {
@@ -38,10 +39,24 @@ class AppState extends ChangeNotifier {
   DateTime? _lastSpokenTime;
   bool _voiceGuidanceEnabled = true;
 
+  LatLng? _lastGeocodedTurnPos;
+  String? _nextStreetName;
+  bool _geocodingTurn = false;
+
+  String? get nextStreetName => _nextStreetName;
+
   bool get voiceGuidanceEnabled => _voiceGuidanceEnabled;
   set voiceGuidanceEnabled(bool val) {
     _voiceGuidanceEnabled = val;
     notifyListeners();
+  }
+
+  bool get isNearUTurnZone {
+    if (lastPos == null || data.route.uTurnZone == null) return false;
+    return Geolocator.distanceBetween(
+      lastPos!.lat, lastPos!.lng,
+      data.route.uTurnZone!.lat, data.route.uTurnZone!.lng
+    ) < 60; // within 60 meters
   }
 
   LatLng? lastPos;
@@ -173,8 +188,51 @@ class AppState extends ChangeNotifier {
         _speakInstruction(instr);
       }
     }
+
+    // Geocode next turn street
+    final g = nextTurnGuidance;
+    if (g != null && g.turnLatLng != null && g.direction != 'tout droit') {
+      unawaited(_maybeGeocodeNextTurn(g.turnLatLng!));
+    } else {
+      _nextStreetName = null;
+    }
+
     unawaited(_maybeReverseGeocode(lastPos!));
     notifyListeners();
+  }
+
+  Future<void> _maybeGeocodeNextTurn(LatLng pos) async {
+    if (_geocodingTurn) return;
+    final last = _lastGeocodedTurnPos;
+    if (last != null && Geolocator.distanceBetween(last.lat, last.lng, pos.lat, pos.lng) < 30) {
+      return;
+    }
+    _geocodingTurn = true;
+    _lastGeocodedTurnPos = pos;
+    try {
+      final uri = Uri.https('nominatim.openstreetmap.org', '/reverse', {
+        'format': 'jsonv2',
+        'lat': '${pos.lat}',
+        'lon': '${pos.lng}',
+        'zoom': '17',
+        'addressdetails': '1',
+      });
+      final res = await http
+          .get(uri, headers: {'User-Agent': 'ma_tournee (usage personnel, non-commercial)'})
+          .timeout(const Duration(seconds: 4));
+      if (res.statusCode == 200) {
+        final json = jsonDecode(res.body) as Map<String, dynamic>;
+        final addr = json['address'] as Map<String, dynamic>?;
+        final street = (addr?['road'] ?? addr?['pedestrian'] ?? addr?['footway'] ?? addr?['residential']) as String?;
+        if (street != null && street.isNotEmpty) {
+          _nextStreetName = street;
+          notifyListeners();
+        }
+      }
+    } catch (_) {
+    } finally {
+      _geocodingTurn = false;
+    }
   }
 
   void _speakInstruction(String instruction) async {
@@ -346,6 +404,20 @@ class AppState extends ChangeNotifier {
 
   TurnGuidance? get nextTurnGuidance {
     if (lastPos == null) return null;
+
+    // Check if near U-turn zone first
+    if (isNearUTurnZone && data.route.uTurnZone != null) {
+      final dist = Geolocator.distanceBetween(
+        lastPos!.lat, lastPos!.lng,
+        data.route.uTurnZone!.lat, data.route.uTurnZone!.lng
+      );
+      return TurnGuidance(
+        distance: dist,
+        direction: 'demi-tour',
+        turnLatLng: LatLng(data.route.uTurnZone!.lat, data.route.uTurnZone!.lng),
+      );
+    }
+
     final points = data.route.points;
     if (points.length < 2) return null;
 
@@ -381,7 +453,11 @@ class AppState extends ChangeNotifier {
 
       if (delta.abs() >= _turnThresholdDeg) {
         final direction = delta > 0 ? 'droite' : 'gauche';
-        return TurnGuidance(distance: cumulative, direction: direction);
+        return TurnGuidance(
+          distance: cumulative,
+          direction: direction,
+          turnLatLng: LatLng(points[i].lat, points[i].lng),
+        );
       }
       if (cumulative >= _turnLookaheadMeters) break;
     }
@@ -392,6 +468,10 @@ class AppState extends ChangeNotifier {
     final g = nextTurnGuidance;
     if (g == null) return null;
     if (g.direction == 'tout droit') return 'Continue tout droit';
+    if (g.direction == 'demi-tour') {
+      final dist = g.distance.round();
+      return dist <= 15 ? 'Faites demi-tour' : 'Dans $dist m, faites demi-tour';
+    }
     final dist = g.distance.round();
     final dir = g.direction == 'droite' ? 'à droite' : 'à gauche';
     return dist <= 15 ? 'Tourne $dir' : 'Dans $dist m, tourne $dir';
@@ -401,6 +481,7 @@ class AppState extends ChangeNotifier {
     final g = nextTurnGuidance;
     if (g == null) return null;
     if (g.direction == 'tout droit') return 'Continue tout droit';
+    if (g.direction == 'demi-tour') return 'Faites demi-tour';
     final dir = g.direction == 'droite' ? 'à droite' : 'à gauche';
     return 'Tourne $dir';
   }

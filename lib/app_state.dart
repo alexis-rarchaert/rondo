@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 
@@ -26,6 +27,17 @@ class AppState extends ChangeNotifier {
   AppData data = AppData.empty();
   String currentDay = todayKey();
 
+  final FlutterTts _tts = FlutterTts();
+  String? _lastSpokenInstruction;
+  DateTime? _lastSpokenTime;
+  bool _voiceGuidanceEnabled = true;
+
+  bool get voiceGuidanceEnabled => _voiceGuidanceEnabled;
+  set voiceGuidanceEnabled(bool val) {
+    _voiceGuidanceEnabled = val;
+    notifyListeners();
+  }
+
   LatLng? lastPos;
   double? lastAccuracy;
   double? lastHeading;
@@ -47,6 +59,11 @@ class AppState extends ChangeNotifier {
     loaded = true;
     notifyListeners();
     await _initLocation();
+    try {
+      await _tts.setLanguage('fr-FR');
+      await _tts.setSpeechRate(0.5);
+      await _tts.setVolume(1.0);
+    } catch (_) {}
   }
 
   Future<void> _persist() => Storage.save(data);
@@ -144,8 +161,28 @@ class AppState extends ChangeNotifier {
       _checkAutoStop(lastPos!);
       _persist();
     }
+    if (_voiceGuidanceEnabled) {
+      final instr = nextTurnInstruction;
+      if (instr != null && instr != 'Continue tout droit') {
+        _speakInstruction(instr);
+      }
+    }
     unawaited(_maybeReverseGeocode(lastPos!));
     notifyListeners();
+  }
+
+  void _speakInstruction(String instruction) async {
+    final now = DateTime.now();
+    if (_lastSpokenInstruction == instruction &&
+        _lastSpokenTime != null &&
+        now.difference(_lastSpokenTime!) < const Duration(seconds: 12)) {
+      return;
+    }
+    _lastSpokenInstruction = instruction;
+    _lastSpokenTime = now;
+    try {
+      await _tts.speak(instruction);
+    } catch (_) {}
   }
 
   // Point du tracé ajouté au minimum toutes les 30s (voir _recTicker), même

@@ -348,17 +348,18 @@ class _StreetHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final appState = context.watch<AppState>();
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
         color: colors.accent,
         borderRadius: BorderRadius.circular(kRadius),
       ),
       child: Row(
         children: [
-          Icon(_icon, color: colors.accentInk, size: 26),
-          const SizedBox(width: 10),
+          Icon(_icon, color: colors.accentInk, size: 28),
+          const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -371,7 +372,7 @@ class _StreetHeader extends StatelessWidget {
                   style: TextStyle(
                     fontFamily: 'Montserrat',
                     color: colors.accentInk,
-                    fontSize: 20,
+                    fontSize: 18,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -390,6 +391,21 @@ class _StreetHeader extends StatelessWidget {
                 ],
               ],
             ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            icon: Icon(
+              appState.voiceGuidanceEnabled
+                  ? Icons.volume_up_rounded
+                  : Icons.volume_off_rounded,
+              size: 24,
+              color: colors.accentInk,
+            ),
+            onPressed: () {
+              appState.voiceGuidanceEnabled = !appState.voiceGuidanceEnabled;
+            },
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(),
           ),
         ],
       ),

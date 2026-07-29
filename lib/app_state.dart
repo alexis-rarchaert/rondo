@@ -23,6 +23,12 @@ class LatLng {
   const LatLng(this.lat, this.lng);
 }
 
+class TurnGuidance {
+  final double distance;
+  final String direction; // 'droite', 'gauche', 'tout droit'
+  const TurnGuidance({required this.distance, required this.direction});
+}
+
 class AppState extends ChangeNotifier {
   AppData data = AppData.empty();
   String currentDay = todayKey();
@@ -338,7 +344,7 @@ class AppState extends ChangeNotifier {
   static const double _turnThresholdDeg = 28;
   static const double _turnLookaheadMeters = 250;
 
-  String? get nextTurnInstruction {
+  TurnGuidance? get nextTurnGuidance {
     if (lastPos == null) return null;
     final points = data.route.points;
     if (points.length < 2) return null;
@@ -374,13 +380,29 @@ class AppState extends ChangeNotifier {
       final delta = ((bearingHere - refBearing + 180) % 360) - 180;
 
       if (delta.abs() >= _turnThresholdDeg) {
-        final dist = cumulative.round();
-        final direction = delta > 0 ? 'à droite' : 'à gauche';
-        return dist <= 15 ? 'Tourne $direction' : 'Dans $dist m, tourne $direction';
+        final direction = delta > 0 ? 'droite' : 'gauche';
+        return TurnGuidance(distance: cumulative, direction: direction);
       }
       if (cumulative >= _turnLookaheadMeters) break;
     }
-    return 'Continue tout droit';
+    return const TurnGuidance(distance: 0, direction: 'tout droit');
+  }
+
+  String? get nextTurnInstruction {
+    final g = nextTurnGuidance;
+    if (g == null) return null;
+    if (g.direction == 'tout droit') return 'Continue tout droit';
+    final dist = g.distance.round();
+    final dir = g.direction == 'droite' ? 'à droite' : 'à gauche';
+    return dist <= 15 ? 'Tourne $dir' : 'Dans $dist m, tourne $dir';
+  }
+
+  String? get nextTurnInstructionSimplified {
+    final g = nextTurnGuidance;
+    if (g == null) return null;
+    if (g.direction == 'tout droit') return 'Continue tout droit';
+    final dir = g.direction == 'droite' ? 'à droite' : 'à gauche';
+    return 'Tourne $dir';
   }
 
   // ---------------- Recording ----------------

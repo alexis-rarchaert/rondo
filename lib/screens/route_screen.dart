@@ -463,9 +463,36 @@ class _FollowPanel extends StatelessWidget {
     final doneCount = day.visited.where((v) => v).length;
     final pct = stops.isEmpty ? 0.0 : doneCount / stops.length;
 
+    final guidance = app.nextTurnGuidance;
+    final showDistance = guidance != null && guidance.direction != 'tout droit';
+    final distText = showDistance
+        ? (guidance.distance < 1000
+            ? '${guidance.distance.round()} m'
+            : '${(guidance.distance / 1000).toStringAsFixed(1)} km')
+        : '';
+
     return Column(
       children: [
-        _StreetHeader(street: app.currentStreet, turnInstruction: app.nextTurnInstruction, colors: colors),
+        if (showDistance) ...[
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text(
+              distText,
+              style: TextStyle(
+                fontSize: 34,
+                fontWeight: FontWeight.w900,
+                fontFamily: 'Montserrat',
+                color: colors.live,
+              ),
+            ),
+          ),
+          const SizedBox(height: 2),
+        ],
+        _StreetHeader(
+          street: app.currentStreet,
+          turnInstruction: app.nextTurnInstructionSimplified,
+          colors: colors,
+        ),
         const SizedBox(height: 10),
         _MapBox(colors: colors, nextStopIndex: nextIdx, navigate: true),
         if (nextIdx != null) ...[

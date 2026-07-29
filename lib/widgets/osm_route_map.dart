@@ -126,7 +126,8 @@ class _OsmRouteMapState extends State<OsmRouteMap> {
             ),
             children: [
               TileLayer(
-                urlTemplate: 'https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+                urlTemplate: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png',
+                subdomains: const ['a', 'b', 'c', 'd'],
                 userAgentPackageName: 'fr.matournee.app',
               ),
               if (points.length >= 2)
